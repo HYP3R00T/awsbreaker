@@ -1,0 +1,22 @@
+{
+  "name": "devcontainer-python-template",
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
+  "postCreateCommand": "scripts/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "tamasfe.even-better-toml",
+        "christian-kohler.path-intellisense",
+        "ms-python.vscode-pylance",
+        "ms-python.python",
+        "ms-python.debugpy",
+        "charliermarsh.ruff",
+        "redhat.vscode-yaml",
+        "hverlin.mise-vscode"
+      ]
+    }
+  }
+}

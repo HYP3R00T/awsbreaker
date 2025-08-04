@@ -1,0 +1,70 @@
+name: 🐛 Bug Report
+description: Report a reproducible issue or unexpected behavior in the project.
+title: "[Bug]: "
+labels: [bug]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the form below so we can investigate the issue.
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, tool version, etc.
+      placeholder: "e.g. Ubuntu 22.04, Python 3.11, mise v2025.5.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Describe the steps to trigger the issue. Be as specific as possible.
+      placeholder: |
+        1. Run command '...'
+        2. Click on '...'
+        3. See error '...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Screenshots
+      description: Paste error logs or screenshots here, if any.
+      placeholder: |
+        ```
+        Traceback (most recent call last):
+          ...
+        ```
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I’ve verified this bug hasn’t been reported before.
+          required: true
+        - label: I’ve included all relevant logs/screenshots/configs.
+          required: false

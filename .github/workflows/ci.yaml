@@ -1,0 +1,28 @@
+name: CI Pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  uv-ci:
+    name: CI (uv)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked --dev
+
+      - name: Lint with Ruff
+        run: |
+          uv run ruff check --output-format=github --target-version=py313 src tests
+          uv run ruff format --diff --check --target-version=py313 src tests

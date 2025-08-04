@@ -1,0 +1,53 @@
+# EditorConfig helps maintain consistent coding styles across different editors
+# https://editorconfig.org
+
+# This is the top-most EditorConfig file
+root = true
+
+# Default settings for all files
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Python files - aligned with ruff.toml configuration
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Python specific files
+[*.{pyi,pyx}]
+indent_style = space
+indent_size = 4
+max_line_length = 120
+
+# Configuration files
+[*.{toml,yaml,yml}]
+indent_size = 2
+
+# JSON files
+[*.json]
+indent_size = 2
+
+# Shell scripts
+[*.{sh,bash,zsh}]
+indent_size = 2
+
+# Docker files
+[{Dockerfile,Dockerfile.*}]
+indent_size = 2
+
+# Markdown files - allow trailing whitespace for line breaks
+[*.md]
+trim_trailing_whitespace = false
+indent_size = 2
+
+# Makefile requires tabs
+[{Makefile,makefile,*.mk}]
+indent_style = tab

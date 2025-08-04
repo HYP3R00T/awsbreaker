@@ -1,0 +1,47 @@
+{
+  "editor.detectIndentation": false,
+  "editor.formatOnSave": true,
+  "github.copilot.chat.codeGeneration.useInstructionFiles": true,
+  "github.copilot.chat.reviewSelection.instructions": [
+    {
+      "file": "./.github/instructions/codeReview.instructions.md"
+    }
+  ],
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "file": "./.github/instructions/commitMessageGeneration.instructions.md"
+    }
+  ],
+  "github.copilot.chat.pullRequestDescriptionGeneration.instructions": [
+    {
+      "file": "./.github/instructions/pullRequestDescriptionGeneration.instructions.md"
+    }
+  ],
+  "[python]": {
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    },
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.rulers": [
+      120
+    ]
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
+  },
+  "chat.instructionsFilesLocations": {
+    ".github/instructions": true
+  },
+  "chat.promptFiles": false,
+  "python.defaultInterpreterPath": "/home/vscode/.local/share/mise/installs/python/3.13.5/bin/python",
+  "ruff.interpreter": [
+    "/home/vscode/.local/share/mise/shims/python"
+  ],
+  "ruff.path": [
+    "/home/vscode/.local/share/mise/shims/ruff"
+  ]
+}
