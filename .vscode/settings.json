@@ -37,7 +37,7 @@
     ".github/instructions": true
   },
   "chat.promptFiles": false,
-  "python.defaultInterpreterPath": "/home/vscode/.local/share/mise/installs/python/3.13.5/bin/python",
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
   "ruff.interpreter": [
     "/home/vscode/.local/share/mise/shims/python"
   ],

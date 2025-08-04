@@ -1,52 +1,17 @@
-> 📖 **New to this template?** Check out the [comprehensive setup guide](http://hyperoot.dev/python-template/setup) for detailed instructions on getting started.
+# AWSBreaker
 
----
+> [!CAUTION]
+> AWSBreaker will delete AWS resources aggressively and indiscriminately once triggered.
+> This tool is designed for **students and experimenters** who are worried about accidental AWS costs.
 
-# Project Name
+AWSBreaker is an **automated kill-switch for AWS accounts**.
+It monitors **AWS Budgets**, and when costs exceed predefined limits, it triggers automated cleanup of AWS resources to prevent unexpected charges.
 
-Brief description of what your project does.
+## 🎯 Project Objectives
 
-## Features
-
-- Feature 1
-- Feature 2
-- Feature 3
-
-## Installation
-
-```bash
-# Clone your repository
-git clone https://github.com/YOUR_USERNAME/YOUR_PROJECT_NAME.git
-cd YOUR_PROJECT_NAME
-
-# Initialize the project
-uv init  # or uv init --package for distributable packages
-
-# Install dependencies
-uv add your-dependencies
-uv add --dev pytest ruff
-```
-
-## Usage
-
-```python
-# Add usage examples here
-from your_project import main
-
-result = main()
-print(result)
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Please follow the coding standards defined in `.github/copilot-instructions.md`.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- **Primary Goal**: Prevent unexpected AWS bills by automatically cleaning up resources once a cost budget threshold is breached.
+- **Approach**:
+  - Monitor costs using AWS Budgets.
+  - Trigger alerts via SNS when budget crosses threshold.
+  - Automated cleanup using a Python-based AWS Lambda function (boto3).
+  - Fully serverless & free-tier friendly (Lambda, SNS, Budgets only).

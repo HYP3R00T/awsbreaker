@@ -1,0 +1,19 @@
+[project]
+name = "awsbreaker"
+version = "0.1.0"
+description = "A kill-switch for AWS that automatically deletes resources when spending limits are breached."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "hyperoot", email = "rajesh@hyperoot.dev" }]
+requires-python = ">=3.13"
+dependencies = ["boto3>=1.40.1", "structlog>=25.4.0"]
+
+[dependency-groups]
+dev = ["pytest>=8.4.1", "pytest-cov>=6.2.1", "ruff>=0.12.7"]
+
+[project.scripts]
+awsbreaker = "awsbreaker:main"
+
+[build-system]
+requires = ["uv_build>=0.8.4,<0.9.0"]
+build-backend = "uv_build"
