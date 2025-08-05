@@ -1,22 +1,26 @@
 {
-  "name": "awsbreaker",
-  "build": {
-    "context": ".",
-    "dockerfile": "Dockerfile"
-  },
-  "postCreateCommand": "scripts/setup.sh",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "tamasfe.even-better-toml",
-        "christian-kohler.path-intellisense",
-        "ms-python.vscode-pylance",
-        "ms-python.python",
-        "ms-python.debugpy",
-        "charliermarsh.ruff",
-        "redhat.vscode-yaml",
-        "hverlin.mise-vscode"
-      ]
-    }
-  }
+    "name": "awsbreaker",
+    "build": {
+        "context": ".",
+        "dockerfile": "Dockerfile"
+    },
+    "postCreateCommand": "scripts/setup.sh",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "tamasfe.even-better-toml",
+                "christian-kohler.path-intellisense",
+                "ms-python.vscode-pylance",
+                "ms-python.python",
+                "ms-python.debugpy",
+                "charliermarsh.ruff",
+                "redhat.vscode-yaml",
+                "hverlin.mise-vscode",
+                "amazonwebservices.aws-toolkit-vscode"
+            ]
+        }
+    },
+    "mounts": [
+        "source=${env:USERPROFILE}/.aws,target=/home/vscode/.aws,type=bind"
+    ]
 }
