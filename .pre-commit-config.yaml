@@ -15,6 +15,7 @@ repos:
     hooks:
       - id: uv-lock
       - id: uv-export
+        args: ["--no-hashes"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.12.7
     hooks:
