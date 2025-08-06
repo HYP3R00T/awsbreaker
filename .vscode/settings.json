@@ -23,9 +23,6 @@
             "source.organizeImports.ruff": "explicit"
         },
         "editor.defaultFormatter": "charliermarsh.ruff",
-        "editor.rulers": [
-            120
-        ]
     },
     "[toml]": {
         "editor.defaultFormatter": "tamasfe.even-better-toml"
