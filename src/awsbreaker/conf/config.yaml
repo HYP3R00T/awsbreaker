@@ -1,0 +1,8 @@
+api_url: "https://api.example.com"
+timeout: 30
+retries: 3
+debug: false
+
+aws:
+  region: "us-east-1"
+  profile: "default"
