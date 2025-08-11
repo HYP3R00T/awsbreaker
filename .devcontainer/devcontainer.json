@@ -21,6 +21,6 @@
         }
     },
     "mounts": [
-        "source=${env:USERPROFILE}/.aws,target=/home/vscode/.aws,type=bind"
+        "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind"
     ]
 }
