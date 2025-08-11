@@ -93,3 +93,44 @@ def test_singleton_and_reload(monkeypatch: pytest.MonkeyPatch) -> None:
     reload_config()
     cfg3 = get_config()
     assert cfg3.timeout == 8
+
+
+def test_load_env_safe_load_exception_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Force yaml.safe_load to raise so we hit the exception branch and fallback to raw string
+    monkeypatch.setenv("AWSBREAKER_BROKEN", "{not: yaml}")
+    import awsbreaker.conf.config as cfgmod
+
+    def boom(_value: str):  # type: ignore[no-untyped-def]
+        raise ValueError("parse error")
+
+    monkeypatch.setattr(cfgmod.yaml, "safe_load", boom)
+    data = _load_env()
+    assert data == {"broken": "{not: yaml}"}
+
+
+def test_get_config_with_explicit_file_and_cli_args(tmp_path: Path) -> None:
+    # Prepare a specific config file to exercise the explicit file branch
+    cfg_file = tmp_path / "overrides.yaml"
+    cfg_file.write_text(
+        yaml.safe_dump({
+            "api_url": "https://from-file",
+            "timeout": 99,
+            "nested": {"x": 1},
+        })
+    )
+
+    # Pass CLI args including a None to ensure None-valued keys are filtered
+    cli_args = {"debug": True, "retries": None, "nested": {"y": 2}}
+
+    # Ensure fresh singleton and load with both explicit file and CLI args
+    cfg = reload_config(config_file=cfg_file, cli_args=cli_args)
+
+    # From file
+    assert cfg.api_url == "https://from-file"
+    assert cfg.timeout == 99
+    assert cfg.nested.x == 1
+
+    # From CLI (merge and None filtered)
+    assert cfg.debug is True  # overridden by CLI
+    assert cfg.retries == 3  # default retained; None CLI value ignored
+    assert cfg.nested.y == 2  # merged into nested dict
