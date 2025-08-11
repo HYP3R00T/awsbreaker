@@ -36,7 +36,6 @@ The goal of code review is to ensure high-quality, maintainable, and secure code
 
 ### Logging
 
-- Uses `structlog` instead of the standard `logging` module.
 - Logs include structured, context-rich fields (e.g., `event="...", user_id=...`).
 - Errors and exceptions are logged with severity: `info`, `warning`, `error`, `critical`.
 - Avoid logging sensitive data.
