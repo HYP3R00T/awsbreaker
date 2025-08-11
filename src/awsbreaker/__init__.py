@@ -1,2 +1,3 @@
-def main() -> None:
-    print("Hello from awsbreaker!")
+from awsbreaker.logger import setup_logging
+
+__all__ = ["setup_logging"]
