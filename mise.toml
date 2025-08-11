@@ -14,3 +14,27 @@ enter = "bash ./scripts/setup_project.sh"
 
 [env]
 UV_LINK_MODE = "copy"
+
+[tasks.run]
+description = "Run the awsbreaker app"
+run = "uv run python -m awsbreaker.main"
+
+[tasks.test]
+description = "Run unit tests"
+run = "uv run pytest -q"
+
+[tasks.test_cov]
+description = "Run tests with coverage"
+run = "uv run pytest --cov=awsbreaker --cov-report=term-missing"
+
+[tasks.lint]
+description = "Run ruff linter"
+run = "uv run ruff check ."
+
+[tasks.fmt]
+description = "Format code with ruff"
+run = "uv run ruff format ."
+
+[tasks.fix]
+description = "Auto-fix issues with ruff and format"
+run = ["uv run ruff check --fix .", "uv run ruff format ."]
