@@ -35,4 +35,7 @@
     },
     "chat.promptFiles": false,
     "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+    "debug.javascript.defaultRuntimeExecutable": {
+        "pwa-node": "/home/hyperoot/.local/share/mise/shims/node"
+    }
 }
