@@ -1,8 +1,15 @@
-logging_level: INFO
-api_url: "https://api.example.com"
-timeout: 30
+logging_level: WARN
+
 retries: 3
-debug: false
+
 aws:
   region: "us-east-1"
   profile: "default"
+  aws_access_key_id: "" # leave empty if using credentials file
+  aws_secret_access_key: ""
+  aws_session_token: "" # optional
+  credential_file_path: "~/.aws/credentials"
+
+permissions:
+  audit: true
+  allow_live_delete: false

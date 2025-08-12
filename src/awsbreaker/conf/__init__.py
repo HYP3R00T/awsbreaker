@@ -1,4 +1,4 @@
-from .config import (
+from awsbreaker.conf.config import (
     Config,
     get_config,
     reload_config,
