@@ -3,13 +3,13 @@ verbose: false # when true, forces DEBUG level and prints logs to console
 logging:
   level: DEBUG
   file_enabled: false
-  dir: "~/.local/share/awsbreaker/logs"
+  dir: ~/.local/share/awsbreaker/logs
 aws:
-  profile: "default"
+  profile: default
   aws_access_key_id: "" # leave empty if using credentials file
   aws_secret_access_key: ""
   aws_session_token: "" # optional
-  credential_file_path: "~/.aws/credentials"
+  credential_file_path: ~/.aws/credentials
   region:
     # - all # to scan through all region (WIP)
     - us-east-1
