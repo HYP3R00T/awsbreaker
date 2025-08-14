@@ -132,5 +132,7 @@ def test_get_config_with_explicit_file_and_cli_args(tmp_path: Path) -> None:
 
     # From CLI (merge and None filtered)
     assert cfg.debug is True  # overridden by CLI
-    assert cfg.retries == 3  # default retained; None CLI value ignored
+    # 'retries' does not exist in defaults and None-valued CLI keys are ignored
+    with pytest.raises(AttributeError):
+        _ = cfg.retries
     assert cfg.nested.y == 2  # merged into nested dict

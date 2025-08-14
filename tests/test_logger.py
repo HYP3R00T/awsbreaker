@@ -1,5 +1,6 @@
 import logging
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -30,34 +31,43 @@ def isolated_root_logger():
             root.addHandler(h)
 
 
-def test_setup_logging_defaults_to_info(capsys: pytest.CaptureFixture[str]):
+def test_setup_logging_defaults_to_info_no_console(capsys: pytest.CaptureFixture[str], tmp_path: Path):
+    class Cfg:
+        logging_level = "INFO"
+        logging = type("L", (), {"file_enabled": False, "dir": str(tmp_path)})()
+
     with isolated_root_logger():
-        setup_logging(None)
+        setup_logging(Cfg())
         logger = logging.getLogger(__name__)
         logger.info("hello info")
         logger.debug("hello debug")
 
+        # No console output expected
         out = capsys.readouterr().out
-        assert " - INFO - hello info" in out
-        assert " - DEBUG - hello debug" not in out
+        assert out == ""
 
 
-def test_setup_logging_respects_debug_level(capsys: pytest.CaptureFixture[str]):
+def test_setup_logging_respects_debug_level_file_enabled(tmp_path: Path):
     class Cfg:
         logging_level = "debug"
+        logging = type("L", (), {"file_enabled": True, "dir": str(tmp_path)})()
 
     with isolated_root_logger():
         setup_logging(Cfg())
         logger = logging.getLogger(__name__)
         logger.debug("hello debug")
 
-        out = capsys.readouterr().out
-        assert " - DEBUG - hello debug" in out
+        # Expect a log file created with the debug message inside
+        files = list(tmp_path.glob("*.log"))
+        assert files, "expected a log file to be created"
+        content = files[0].read_text()
+        assert "DEBUG - hello debug" in content
 
 
-def test_setup_logging_invalid_level_falls_back_to_info(capsys: pytest.CaptureFixture[str]):
+def test_setup_logging_invalid_level_falls_back_to_info_file(tmp_path: Path):
     class Cfg:
         logging_level = "not-a-level"
+        logging = type("L", (), {"file_enabled": True, "dir": str(tmp_path)})()
 
     with isolated_root_logger():
         setup_logging(Cfg())
@@ -65,6 +75,8 @@ def test_setup_logging_invalid_level_falls_back_to_info(capsys: pytest.CaptureFi
         logger.info("hello info")
         logger.debug("hello debug")
 
-        out = capsys.readouterr().out
-        assert " - INFO - hello info" in out
-        assert " - DEBUG - hello debug" not in out
+        files = list(tmp_path.glob("*.log"))
+        assert files, "expected a log file to be created"
+        content = files[0].read_text()
+        assert "INFO - hello info" in content
+        assert "DEBUG - hello debug" not in content

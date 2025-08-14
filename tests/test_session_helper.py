@@ -26,7 +26,7 @@ def test_create_session_with_explicit_keys(monkeypatch: pytest.MonkeyPatch, capl
             "aws_access_key_id": "AKIA_TEST",
             "aws_secret_access_key": "SECRET",
             "aws_session_token": "TOKEN",
-            "region": "us-west-2",
+            "region": ["us-west-2"],
         }
     })
 
@@ -42,7 +42,6 @@ def test_create_session_with_explicit_keys(monkeypatch: pytest.MonkeyPatch, capl
         "aws_access_key_id": "AKIA_TEST",
         "aws_secret_access_key": "SECRET",
         "aws_session_token": "TOKEN",
-        "region_name": "us-west-2",
     }
     assert "Using credentials from config (access key + secret)" in "\n".join(caplog.messages)
     assert os.environ.get("AWS_SHARED_CREDENTIALS_FILE") is None
@@ -54,7 +53,7 @@ def test_create_session_with_credentials_file(monkeypatch: pytest.MonkeyPatch, c
         "aws": {
             "credential_file_path": "~/fake/.aws/alt_credentials",
             "profile": "dev",
-            "region": "eu-central-1",
+            "region": ["eu-central-1"],
         }
     })
 
@@ -70,13 +69,13 @@ def test_create_session_with_credentials_file(monkeypatch: pytest.MonkeyPatch, c
 
     assert isinstance(sess, DummySession)
     assert captured["args"] == ()
-    assert captured["kwargs"] == {"profile_name": "dev", "region_name": "eu-central-1"}
+    assert captured["kwargs"] == {"profile_name": "dev"}
     assert os.environ.get("AWS_SHARED_CREDENTIALS_FILE") == path
     assert f"Using credentials file at {path} with profile 'dev'" in "\n".join(caplog.messages)
 
 
 def test_create_session_defaults_when_no_credentials(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture):
-    cfg = Config({"aws": {"region": "ap-southeast-1"}})
+    cfg = Config({"aws": {"region": ["ap-southeast-1"]}})
 
     captured: dict = {}
     monkeypatch.setattr(session_helper.boto3, "Session", _fake_session_factory(captured))
@@ -87,7 +86,7 @@ def test_create_session_defaults_when_no_credentials(monkeypatch: pytest.MonkeyP
         sess = session_helper.create_aws_session(cfg)
 
     assert isinstance(sess, DummySession)
-    assert captured["kwargs"] == {"region_name": "ap-southeast-1"}
+    assert captured["kwargs"] == {}
     assert "Using default boto3 session (env vars, ~/.aws/credentials, etc.)" in "\n".join(caplog.messages)
 
 
@@ -102,4 +101,4 @@ def test_create_session_when_config_missing_aws(monkeypatch: pytest.MonkeyPatch)
     sess = session_helper.create_aws_session(cfg)
 
     assert isinstance(sess, DummySession)
-    assert "region_name" in captured["kwargs"] and captured["kwargs"]["region_name"] is None
+    assert "region" not in captured["kwargs"]
