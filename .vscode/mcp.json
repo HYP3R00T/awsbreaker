@@ -1,0 +1,12 @@
+{
+    "servers": {
+        "AWS Docs": {
+            "type": "stdio",
+            "command": "/home/vscode/.local/share/mise/installs/uv/0.8.10/uv-x86_64-unknown-linux-musl/uvx", // TODO: update it with change in uv version
+            "args": [
+                "awslabs.aws-documentation-mcp-server@latest"
+            ]
+        }
+    },
+    "inputs": []
+}
