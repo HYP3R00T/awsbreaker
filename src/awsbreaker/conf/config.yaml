@@ -1,15 +1,20 @@
-logging_level: WARN
-
-retries: 3
-
+dry_run: false
+verbose: false # when true, forces DEBUG level and prints logs to console
+logging:
+  level: DEBUG
+  file_enabled: false
+  dir: "~/.local/share/awsbreaker/logs"
 aws:
-  region: "us-east-1"
   profile: "default"
   aws_access_key_id: "" # leave empty if using credentials file
   aws_secret_access_key: ""
   aws_session_token: "" # optional
   credential_file_path: "~/.aws/credentials"
-
-permissions:
-  audit: true
-  allow_live_delete: false
+  region:
+    # - all # to scan through all region (WIP)
+    - us-east-1
+    - ap-south-1
+  services:
+    # - all to scan for all services (WIP)
+    - ec2
+  # - lambda
