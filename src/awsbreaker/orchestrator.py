@@ -5,15 +5,15 @@ from typing import Any
 
 from awsbreaker.conf.config import get_config
 from awsbreaker.core.session_helper import create_aws_session
-from awsbreaker.services import ec2 as ec2_service
-from awsbreaker.services import lambda_service as lambda_service_module
+from awsbreaker.services import ec2_service as ec2_service
+from awsbreaker.services import lambda_service as lambda_service
 
 logger = logging.getLogger(__name__)
 
 SERVICE_HANDLERS = {
     # Each value can be a functional entrypoint `run(session, region, dry_run, reporter)`
     "ec2": ec2_service.run,
-    "lambda": lambda_service_module.run,
+    "lambda": lambda_service.run,
     # Add other services here, e.g., "s3": s3_service.run
 }
 
@@ -113,7 +113,8 @@ def orchestrate_services(dry_run: bool = False) -> None:
     if not selected_service_keys:
         raise ValueError("No valid services selected in the configuration.")
 
-    services_to_process = [SERVICE_HANDLERS[s] for s in selected_service_keys]
+    # Keep both key and handler together to avoid reverse lookups later
+    services_to_process: list[tuple[str, Any]] = [(s, SERVICE_HANDLERS[s]) for s in selected_service_keys]
 
     # Create a base AWS session based on config/credentials
     session = create_aws_session(config)
@@ -148,41 +149,36 @@ def orchestrate_services(dry_run: bool = False) -> None:
 
     logger.info("Regions to process: %s", regions)
     logger.info("Selected services: %s", selected_service_keys)
-    logger.debug("Service handlers: %s", [s.__name__ for s in services_to_process])
+    logger.debug("Service handlers: %s", [h.__name__ for _, h in services_to_process])
 
-    # Allow custom worker count via config, fallback to reasonable default
+    # Prebuild the work list and account for skips up front (still log skips)
+    tasks: list[tuple[str, str, Any]] = []  # (region, service_key, handler_entry)
+    skipped = 0
+    for region in regions:
+        for service_key, handler_entry in services_to_process:
+            if not _service_supported_in_region(available_regions_map, service_key, region):
+                logger.info("[%s][%s] Skipped: service not available in region", region, service_key)
+                skipped += 1
+                continue
+            tasks.append((region, service_key, handler_entry))
+
+    # Allow custom worker count via config, fallback to reasonable default based on actual tasks
     max_workers = getattr(getattr(config, "aws", None), "max_workers", None)
     if not isinstance(max_workers, int) or max_workers <= 0:
-        # Cap to avoid too many threads; scale with task count
-        total_tasks = max(1, len(regions) * len(services_to_process))
+        total_tasks = max(1, len(tasks))
         max_workers = min(32, total_tasks)
 
     submitted = 0
-    skipped = 0
     failures = 0
     deletions_total = 0
     succeeded = 0
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map: dict[Any, tuple[str, str]] = {}
-        for region in regions:
-            for handler_entry in services_to_process:
-                # find key name for handler for support check and labeling
-                service_key = None
-                for k, v in SERVICE_HANDLERS.items():
-                    if v is handler_entry:
-                        service_key = k
-                        break
-                service_key = service_key or getattr(handler_entry, "__name__", str(handler_entry))
-
-                if not _service_supported_in_region(available_regions_map, service_key, region):
-                    logger.info("[%s][%s] Skipped: service not available in region", region, service_key)
-                    skipped += 1
-                    continue
-
-                fut = executor.submit(process_region_service, session, region, service_key, handler_entry, dry_run)
-                future_map[fut] = (region, service_key)
-                submitted += 1
+        for region, service_key, handler_entry in tasks:
+            fut = executor.submit(process_region_service, session, region, service_key, handler_entry, dry_run)
+            future_map[fut] = (region, service_key)
+            submitted += 1
 
         for future in as_completed(future_map):
             region, svc_name = future_map[future]
