@@ -15,15 +15,15 @@ def _safe_get(obj: Any, attr: str, default: Any) -> Any:
 def setup_logging(config: Any | None = None) -> None:
     """Configure logging.
 
-        - By default, do not emit logs to stdout/stderr (no console handler).
-        - If config.verbose is True, force DEBUG level and emit logs to console (stdout).
-        - Optionally write logs to a per-execution file if enabled via config.
+    - By default, do not emit logs to stdout/stderr (no console handler).
+    - If config.verbose is True, emit logs to console (stdout) at the configured level.
+    - Optionally write logs to a per-execution file if enabled via config.
 
     Config keys supported:
       - logging_level (root level string, e.g. "INFO", "DEBUG").
       - logging.file_enabled (bool): whether to write logs to file. Default: True.
       - logging.dir (str): directory where log files will be placed. Default: "./logs".
-            - verbose (bool): when True, sets DEBUG level and enables console output.
+            - verbose (bool): when True, enables console output (respects configured level).
     """
 
     # Resolve level with fallback
@@ -46,8 +46,6 @@ def setup_logging(config: Any | None = None) -> None:
             verbose = False
     if lvl_str:
         level = getattr(logging, str(lvl_str).upper(), level)
-    if verbose:
-        level = logging.DEBUG
 
     # Prepare handlers (console when verbose; file when enabled)
     handlers: list[logging.Handler] = []
