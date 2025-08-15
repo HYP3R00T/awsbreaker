@@ -1,7 +1,7 @@
 dry_run: false
-verbose: false # when true, forces DEBUG level and prints logs to console
+verbose: true # when true, enables console logs; level is controlled by logging.level
 logging:
-  level: DEBUG
+  level: INFO
   file_enabled: false
   dir: ~/.local/share/awsbreaker/logs
 aws:
@@ -10,6 +10,7 @@ aws:
   aws_secret_access_key: ""
   aws_session_token: "" # optional
   credential_file_path: ~/.aws/credentials
+  max_workers: 4
   region:
     # - all # to scan through all region (WIP)
     - us-east-1
