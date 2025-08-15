@@ -6,7 +6,7 @@ readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "hyperoot", email = "rajesh@hyperoot.dev" }]
 requires-python = ">=3.13"
-dependencies = ["boto3>=1.40.1", "pyyaml>=6.0.2"]
+dependencies = ["boto3>=1.40.1", "pyfiglet>=1.0.3", "pyyaml>=6.0.2"]
 
 [dependency-groups]
 dev = ["pytest>=8.4.1", "pytest-cov>=6.2.1", "ruff>=0.12.7"]
