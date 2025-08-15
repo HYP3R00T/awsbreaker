@@ -1,5 +1,6 @@
 import inspect
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -98,7 +99,11 @@ def process_region_service(
     raise TypeError(f"Unsupported handler type for service '{service_key}': {type(handler_entry)!r}")
 
 
-def orchestrate_services(dry_run: bool = False) -> None:
+def orchestrate_services(
+    dry_run: bool = False,
+    progress_cb: Callable[[dict[str, int]], None] | None = None,
+    print_summary: bool = True,
+) -> dict[str, int]:
     config = get_config()
 
     # Resolve services
@@ -180,6 +185,19 @@ def orchestrate_services(dry_run: bool = False) -> None:
             future_map[fut] = (region, service_key)
             submitted += 1
 
+        # Initial progress update
+        if progress_cb:
+            progress_cb({
+                "submitted": submitted,
+                "skipped": skipped,
+                "failures": failures,
+                "succeeded": succeeded,
+                "deletions": deletions_total,
+                "completed": 0,
+                "pending": len(future_map),
+            })
+
+        completed = 0
         for future in as_completed(future_map):
             region, svc_name = future_map[future]
             try:
@@ -191,9 +209,30 @@ def orchestrate_services(dry_run: bool = False) -> None:
             except Exception as e:
                 failures += 1
                 logger.exception("[%s][%s] Task failed: %s", region, svc_name, e)
+            finally:
+                completed += 1
+                if progress_cb:
+                    progress_cb({
+                        "submitted": submitted,
+                        "skipped": skipped,
+                        "failures": failures,
+                        "succeeded": succeeded,
+                        "deletions": deletions_total,
+                        "completed": completed,
+                        "pending": max(0, len(future_map) - completed),
+                    })
 
     # Here, "succeeded" means tasks that actually deleted at least one resource.
     # This excludes skipped tasks and no-op runs (e.g., nothing to delete or dry-run).
-    print(
-        f"Summary => submitted={submitted}, skipped={skipped}, failures={failures}, succeeded={succeeded}, deletions={deletions_total}"
-    )
+    if print_summary:
+        print(
+            f"Summary => submitted={submitted}, skipped={skipped}, failures={failures}, succeeded={succeeded}, deletions={deletions_total}"
+        )
+
+    return {
+        "submitted": submitted,
+        "skipped": skipped,
+        "failures": failures,
+        "succeeded": succeeded,
+        "deletions": deletions_total,
+    }

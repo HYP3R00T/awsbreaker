@@ -1,5 +1,6 @@
 import logging
 import sys
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -94,3 +95,15 @@ def setup_logging(config: Any | None = None) -> None:
     root.setLevel(level)
     for h in handlers:
         root.addHandler(h)
+
+    # Quiet common third-party libraries to reduce noisy INFO logs (e.g., botocore credential messages)
+    # Keep our application logs at the configured level while suppressing SDK chatter.
+    for name in (
+        "boto3",
+        "botocore",
+        "botocore.credentials",
+        "s3transfer",
+        "urllib3",
+    ):
+        with suppress(Exception):
+            logging.getLogger(name).setLevel(logging.WARNING)

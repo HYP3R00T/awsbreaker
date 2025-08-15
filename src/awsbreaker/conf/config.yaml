@@ -1,5 +1,5 @@
 dry_run: false
-verbose: true # when true, enables console logs; level is controlled by logging.level
+verbose: false # when true, enables console logs; level is controlled by logging.level
 logging:
   level: INFO
   file_enabled: false
@@ -18,4 +18,4 @@ aws:
   services:
     # - all to scan for all services (WIP)
     - ec2
-  # - lambda
+    - lambda
