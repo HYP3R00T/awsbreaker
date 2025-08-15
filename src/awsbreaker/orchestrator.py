@@ -1,19 +1,20 @@
+import inspect
 import logging
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from awsbreaker.conf.config import get_config
 from awsbreaker.core.session_helper import create_aws_session
-from awsbreaker.services.ec2 import EC2ServiceHandler
-from awsbreaker.services.lambda_service import LambdaServiceHandler
+from awsbreaker.services import ec2 as ec2_service
+from awsbreaker.services import lambda_service as lambda_service_module
 
 logger = logging.getLogger(__name__)
 
 SERVICE_HANDLERS = {
-    "ec2": EC2ServiceHandler,
-    "lambda": LambdaServiceHandler,
-    # Add other services here, e.g., "s3": S3ServiceHandler
+    # Each value can be a functional entrypoint `run(session, region, dry_run, reporter)`
+    "ec2": ec2_service.run,
+    "lambda": lambda_service_module.run,
+    # Add other services here, e.g., "s3": s3_service.run
 }
 
 
@@ -23,21 +24,78 @@ def _service_supported_in_region(available_regions_map: dict[str, set[str]], ser
     return True if regions is None else region in regions
 
 
+def _make_reporter(region: str, service: str):
+    """Create a reporter callable for consistent event logging across services.
+
+    The reporter expects a dict event with keys like phase, resource_type, id, name, action, status, reason, extra.
+    """
+
+    def reporter(event: dict[str, Any]) -> None:
+        phase = event.get("phase", "").upper()
+        rtype = event.get("resource_type", "?")
+        rid = event.get("id") or event.get("arn") or "?"
+        name = event.get("name")
+        action = event.get("action")
+        status = event.get("status")
+        reason = event.get("reason")
+        extra = event.get("extra") or {}
+        # Flatten a few extras into k=v for readability
+        extra_str = " ".join(f"{k}={v}" for k, v in extra.items()) if extra else ""
+        parts = [
+            f"[{region}]",
+            f"[{service}]",
+            f"[{phase}]",
+            f"[{rtype}]",
+            f"id={rid}",
+        ]
+        if name:
+            parts.append(f"name={name}")
+        if action:
+            parts.append(f"action={action}")
+        if status:
+            parts.append(f"status={status}")
+        if reason:
+            parts.append(f"reason={reason}")
+        if extra_str:
+            parts.append(extra_str)
+        logger.info(" ".join(parts))
+
+    return reporter
+
+
 def process_region_service(
     session: Any,
     region: str,
-    service_handler_cls: Callable[[Any, str, bool], Any],
+    service_key: str,
+    handler_entry: Any,
     dry_run: bool,
 ) -> tuple[str, str, int]:
-    service_name = service_handler_cls.__name__
+    service_name = service_key
     logger.info("[%s][%s] Starting (dry_run=%s)", region, service_name, dry_run)
-    handler = service_handler_cls(session, region, dry_run)
-    logger.info("[%s][%s] Scanning", region, service_name)
-    resources = handler.scan_resources()
-    logger.info("[%s][%s] %d resource(s) found", region, service_name, len(resources))
-    deleted = handler.delete_resources(resources)
-    logger.info("[%s][%s] Finished", region, service_name)
-    return region, service_name, int(deleted or 0)
+
+    # Functional entrypoint: run(session, region, dry_run, reporter) -> int (deletions)
+    if inspect.isfunction(handler_entry):
+        reporter = _make_reporter(region, service_name)
+        try:
+            logger.info("[%s][%s] Planning/Executing via functional entrypoint", region, service_name)
+            deleted = handler_entry(session, region, dry_run, reporter)  # type: ignore[call-arg]
+        except Exception as e:
+            logger.exception("[%s][%s] Entrypoint failed: %s", region, service_name, e)
+            raise
+        logger.info("[%s][%s] Finished", region, service_name)
+        return region, service_name, int(deleted or 0)
+
+    # Legacy class-based handler support (for backward compatibility/testing)
+    if inspect.isclass(handler_entry):
+        handler = handler_entry(session, region, dry_run)
+        logger.info("[%s][%s] Scanning", region, service_name)
+        resources = handler.scan_resources()
+        logger.info("[%s][%s] %d resource(s) found", region, service_name, len(resources))
+        deleted = handler.delete_resources(resources)
+        logger.info("[%s][%s] Finished", region, service_name)
+        return region, service_name, int(deleted or 0)
+
+    raise TypeError(f"Unsupported handler type for service '{service_key}': {type(handler_entry)!r}")
 
 
 def orchestrate_services(dry_run: bool = False) -> None:
@@ -108,22 +166,22 @@ def orchestrate_services(dry_run: bool = False) -> None:
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map: dict[Any, tuple[str, str]] = {}
         for region in regions:
-            for service_handler_cls in services_to_process:
+            for handler_entry in services_to_process:
+                # find key name for handler for support check and labeling
                 service_key = None
-                # find key name for handler class for support check
                 for k, v in SERVICE_HANDLERS.items():
-                    if v is service_handler_cls:
+                    if v is handler_entry:
                         service_key = k
                         break
-                service_key = service_key or service_handler_cls.__name__
+                service_key = service_key or getattr(handler_entry, "__name__", str(handler_entry))
 
                 if not _service_supported_in_region(available_regions_map, service_key, region):
                     logger.info("[%s][%s] Skipped: service not available in region", region, service_key)
                     skipped += 1
                     continue
 
-                fut = executor.submit(process_region_service, session, region, service_handler_cls, dry_run)
-                future_map[fut] = (region, service_handler_cls.__name__)
+                fut = executor.submit(process_region_service, session, region, service_key, handler_entry, dry_run)
+                future_map[fut] = (region, service_key)
                 submitted += 1
 
         for future in as_completed(future_map):
