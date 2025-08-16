@@ -19,6 +19,10 @@ UV_LINK_MODE = "copy"
 description = "Run the awsbreaker app"
 run = "uv run python -m awsbreaker.main"
 
+[tasks.cli]
+description = "Run the AWSBreaker CLI (Typer) from local source"
+run = "uv run python -m awsbreaker.cli"
+
 [tasks.test]
 description = "Run unit tests"
 run = "uv run pytest -q"
