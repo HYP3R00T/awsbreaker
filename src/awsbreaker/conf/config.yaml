@@ -1,4 +1,4 @@
-dry_run: false
+dry_run: true
 verbose: false # when true, enables console logs; level is controlled by logging.level
 logging:
   level: INFO

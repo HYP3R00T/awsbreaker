@@ -222,13 +222,6 @@ def orchestrate_services(
                         "pending": max(0, len(future_map) - completed),
                     })
 
-    # Here, "succeeded" means tasks that actually deleted at least one resource.
-    # This excludes skipped tasks and no-op runs (e.g., nothing to delete or dry-run).
-    if print_summary:
-        print(
-            f"Summary => submitted={submitted}, skipped={skipped}, failures={failures}, succeeded={succeeded}, deletions={deletions_total}"
-        )
-
     return {
         "submitted": submitted,
         "skipped": skipped,
