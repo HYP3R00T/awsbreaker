@@ -1,10 +1,10 @@
 name: Release to PyPI
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"   # run only when pushing tags like v1.0.0, v2.3.1, etc.
-  workflow_dispatch:
 
 jobs:
   release:
@@ -23,4 +23,4 @@ jobs:
       - name: Publish package to PyPI
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: uv publish --username __token__ --password "$PYPI_TOKEN"
+        run: uv publish --username __token__ --password $PYPI_TOKEN
