@@ -1,0 +1,26 @@
+name: Release to PyPI
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"   # run only when pushing tags like v1.0.0, v2.3.1, etc.
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v6
+
+      - name: Build package
+        run: uv build --no-sources
+
+      - name: Publish package to PyPI
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: uv publish --username __token__ --password $PYPI_TOKEN
