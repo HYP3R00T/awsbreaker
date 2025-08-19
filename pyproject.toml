@@ -36,8 +36,6 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
-    "Topic :: Software Development :: Cloud",
-    "Topic :: System :: Cost Management",
     "Topic :: System :: Systems Administration",
     "Topic :: Utilities",
     "Typing :: Typed",
