@@ -10,6 +10,20 @@ SERVICE: str = "ec2"
 RESOURCE: str = "key_pair"
 logger = logging.getLogger(__name__)
 
+_ACCOUNT_ID: str | None = None
+
+
+def _get_account_id(session: Session) -> str:
+    """Return (and cache) the current AWS account id (simple module cache)."""
+    global _ACCOUNT_ID
+    if _ACCOUNT_ID is None:
+        try:
+            _ACCOUNT_ID = session.client("sts").get_caller_identity().get("Account", "")
+        except Exception as e:  # pragma: no cover
+            logger.error("Failed to resolve account id: %s", e)
+            _ACCOUNT_ID = ""
+    return _ACCOUNT_ID
+
 
 def catalog_key_pairs(session: Session, region: str) -> list[str]:
     client = session.client(service_name="ec2", region_name=region)
@@ -28,12 +42,14 @@ def cleanup_key_pair(session: Session, region: str, key_pair_id: str, dry_run: b
     reporter = get_reporter()
     action = "catalog" if dry_run else "delete"
     status = "discovered" if dry_run else "executing"
+    account = _get_account_id(session)
+    arn = f"arn:aws:ec2:{region}:{account}:key-pair/{key_pair_id}"
     reporter.record(
         region,
         SERVICE,
         RESOURCE,
         action,
-        arn=key_pair_id,
+        arn=arn,
         meta={"status": status, "dry_run": dry_run},
     )
     client = session.client("ec2", region_name=region)

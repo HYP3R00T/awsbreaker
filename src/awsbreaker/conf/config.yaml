@@ -1,11 +1,11 @@
 dry_run: true
 logging:
-  enabled: true
+  enabled: false
   level: INFO
   dir: ~/.local/share/awsbreaker/logs
 reporting:
   csv:
-    enabled: true
+    enabled: false
     path: ~/.local/share/awsbreaker/reports/events.csv
 aws:
   profile: default
