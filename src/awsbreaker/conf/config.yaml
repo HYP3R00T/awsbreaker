@@ -1,7 +1,7 @@
 dry_run: true
 logging:
-  level: INFO
   enabled: true
+  level: INFO
   dir: ~/.local/share/awsbreaker/logs
 aws:
   profile: default
