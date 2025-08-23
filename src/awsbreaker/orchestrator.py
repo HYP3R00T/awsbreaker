@@ -7,6 +7,7 @@ from boto3.session import Session
 
 from awsbreaker.conf.config import get_config
 from awsbreaker.core.session_helper import create_aws_session
+from awsbreaker.reporter import get_reporter
 from awsbreaker.services.ec2 import cleanup_ec2
 
 logger = logging.getLogger(__name__)
@@ -25,45 +26,6 @@ def _service_supported_in_region(available_regions_map: dict[str, set[str]], ser
     return True if regions is None else region in regions
 
 
-def _make_reporter(region: str, service: str):
-    """Create a reporter callable for consistent event logging across services.
-
-    The reporter expects a dict event with keys like phase, resource_type, id, name, action, status, reason, extra.
-    """
-
-    def reporter(event: dict[str, Any]) -> None:
-        phase = event.get("phase", "").upper()
-        rtype = event.get("resource_type", "?")
-        rid = event.get("id") or event.get("arn") or "?"
-        name = event.get("name")
-        action = event.get("action")
-        status = event.get("status")
-        reason = event.get("reason")
-        extra = event.get("extra") or {}
-        # Flatten a few extras into k=v for readability
-        extra_str = " ".join(f"{k}={v}" for k, v in extra.items()) if extra else ""
-        parts = [
-            f"[{region}]",
-            f"[{service}]",
-            f"[{phase}]",
-            f"[{rtype}]",
-            f"id={rid}",
-        ]
-        if name:
-            parts.append(f"name={name}")
-        if action:
-            parts.append(f"action={action}")
-        if status:
-            parts.append(f"status={status}")
-        if reason:
-            parts.append(f"reason={reason}")
-        if extra_str:
-            parts.append(extra_str)
-        logger.info(" ".join(parts))
-
-    return reporter
-
-
 def process_region_service(
     session: Session,
     region: str,
@@ -73,17 +35,62 @@ def process_region_service(
 ) -> tuple[str, str, int]:
     logger.info("[%s][%s] Starting (dry_run=%s)", region, service_key, dry_run)
 
-    # Functional entrypoint: run(session, region, dry_run, reporter) -> int (deletions)
+    # Updated functional entrypoint: run(session, region, dry_run, **kwargs?) -> int|None We no longer pass a per-call reporter function; instead we record coarse events into the global reporter singleton.
     if inspect.isfunction(handler_entry):
-        reporter = _make_reporter(region, service_key)
+        rep = get_reporter()
         try:
-            logger.info("[%s][%s] Planning/Executing via functional entrypoint", region, service_key)
-            deleted = handler_entry(session, region, dry_run, reporter)  # type: ignore[call-arg]
+            rep.record(
+                region,
+                service_key,
+                "service",
+                "start",
+                meta={"status": "running", "dry_run": dry_run},
+            )
+            logger.info("[%s][%s] Executing service handler", region, service_key)
+            # Call handler with its known signature (session, region, dry_run, *optional)
+            deleted = handler_entry(session, region, dry_run)  # type: ignore[misc]
+        except TypeError:
+            # Fallback: some handlers may accept max_workers default param
+            try:
+                deleted = handler_entry(session=session, region=region, dry_run=dry_run)  # type: ignore[misc]
+            except Exception as e:  # pragma: no cover - bubble after logging
+                rep.record(
+                    region,
+                    service_key,
+                    "service",
+                    "error",
+                    meta={
+                        "status": "failed",
+                        "error": {"type": type(e).__name__, "message": str(e)},
+                        "dry_run": dry_run,
+                    },
+                )
+                logger.exception("[%s][%s] Entrypoint failed: %s", region, service_key, e)
+                raise
         except Exception as e:
+            rep.record(
+                region,
+                service_key,
+                "service",
+                "error",
+                meta={
+                    "status": "failed",
+                    "error": {"type": type(e).__name__, "message": str(e)},
+                    "dry_run": dry_run,
+                },
+            )
             logger.exception("[%s][%s] Entrypoint failed: %s", region, service_key, e)
             raise
-        logger.info("[%s][%s] Finished", region, service_key)
-        return region, service_key, int(deleted or 0)
+        else:
+            rep.record(
+                region,
+                service_key,
+                "service",
+                "finish",
+                meta={"status": "completed", "dry_run": dry_run},
+            )
+            logger.info("[%s][%s] Finished", region, service_key)
+            return region, service_key, int(deleted or 0)
 
     raise TypeError(f"Unsupported handler type for service '{service_key}': {type(handler_entry)!r}")
 
