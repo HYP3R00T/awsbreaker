@@ -1,21 +1,21 @@
 import inspect
 import logging
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from boto3.session import Session
+
 from awsbreaker.conf.config import get_config
 from awsbreaker.core.session_helper import create_aws_session
-from awsbreaker.services import ec2_service as ec2_service
-from awsbreaker.services import lambda_service as lambda_service
+from awsbreaker.services.ec2 import cleanup_ec2
 
 logger = logging.getLogger(__name__)
 
 SERVICE_HANDLERS = {
     # Each value can be a functional entrypoint `run(session, region, dry_run, reporter)`
-    "ec2": ec2_service.run,
-    "lambda": lambda_service.run,
-    # Add other services here, e.g., "s3": s3_service.run
+    "ec2": cleanup_ec2,
+    # "s3": cleanup_s3
+    # "lambda": cleanup_lambda,
 }
 
 
@@ -65,44 +65,31 @@ def _make_reporter(region: str, service: str):
 
 
 def process_region_service(
-    session: Any,
+    session: Session,
     region: str,
     service_key: str,
     handler_entry: Any,
     dry_run: bool,
 ) -> tuple[str, str, int]:
-    service_name = service_key
-    logger.info("[%s][%s] Starting (dry_run=%s)", region, service_name, dry_run)
+    logger.info("[%s][%s] Starting (dry_run=%s)", region, service_key, dry_run)
 
     # Functional entrypoint: run(session, region, dry_run, reporter) -> int (deletions)
     if inspect.isfunction(handler_entry):
-        reporter = _make_reporter(region, service_name)
+        reporter = _make_reporter(region, service_key)
         try:
-            logger.info("[%s][%s] Planning/Executing via functional entrypoint", region, service_name)
+            logger.info("[%s][%s] Planning/Executing via functional entrypoint", region, service_key)
             deleted = handler_entry(session, region, dry_run, reporter)  # type: ignore[call-arg]
         except Exception as e:
-            logger.exception("[%s][%s] Entrypoint failed: %s", region, service_name, e)
+            logger.exception("[%s][%s] Entrypoint failed: %s", region, service_key, e)
             raise
-        logger.info("[%s][%s] Finished", region, service_name)
-        return region, service_name, int(deleted or 0)
-
-    # Legacy class-based handler support (for backward compatibility/testing)
-    if inspect.isclass(handler_entry):
-        handler = handler_entry(session, region, dry_run)
-        logger.info("[%s][%s] Scanning", region, service_name)
-        resources = handler.scan_resources()
-        logger.info("[%s][%s] %d resource(s) found", region, service_name, len(resources))
-        deleted = handler.delete_resources(resources)
-        logger.info("[%s][%s] Finished", region, service_name)
-        return region, service_name, int(deleted or 0)
+        logger.info("[%s][%s] Finished", region, service_key)
+        return region, service_key, int(deleted or 0)
 
     raise TypeError(f"Unsupported handler type for service '{service_key}': {type(handler_entry)!r}")
 
 
 def orchestrate_services(
     dry_run: bool = False,
-    progress_cb: Callable[[dict[str, int]], None] | None = None,
-    print_summary: bool = True,
 ) -> dict[str, int]:
     config = get_config()
 
@@ -185,18 +172,6 @@ def orchestrate_services(
             future_map[fut] = (region, service_key)
             submitted += 1
 
-        # Initial progress update
-        if progress_cb:
-            progress_cb({
-                "submitted": submitted,
-                "skipped": skipped,
-                "failures": failures,
-                "succeeded": succeeded,
-                "deletions": deletions_total,
-                "completed": 0,
-                "pending": len(future_map),
-            })
-
         completed = 0
         for future in as_completed(future_map):
             region, svc_name = future_map[future]
@@ -211,16 +186,6 @@ def orchestrate_services(
                 logger.exception("[%s][%s] Task failed: %s", region, svc_name, e)
             finally:
                 completed += 1
-                if progress_cb:
-                    progress_cb({
-                        "submitted": submitted,
-                        "skipped": skipped,
-                        "failures": failures,
-                        "succeeded": succeeded,
-                        "deletions": deletions_total,
-                        "completed": completed,
-                        "pending": max(0, len(future_map) - completed),
-                    })
 
     return {
         "submitted": submitted,
