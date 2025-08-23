@@ -76,7 +76,6 @@ def get_reporter() -> Reporter:
 
 
 class Sinks:
-    def __init__(self):
-        self.events = get_reporter()
-
-    ...  # export events details in various outputs like print (stdout), logging (based on logging config), csv, etc.
+    def __init__(
+        self,
+    ): ...  # export events details in various outputs like print (stdout), logging (based on logging config), csv, etc.
