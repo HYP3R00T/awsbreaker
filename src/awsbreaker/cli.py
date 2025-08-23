@@ -5,6 +5,7 @@ import argparse
 import threading
 import time
 
+from pyfiglet import Figlet  # type: ignore
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
@@ -14,6 +15,8 @@ from awsbreaker.logger import setup_logging
 from awsbreaker.orchestrator import orchestrate_services
 from awsbreaker.reporter import get_reporter
 
+TAIL_COUNT = 10  # number of most recent events to display
+
 
 def _render_table(reporter, dry_run: bool) -> Table:  # type: ignore
     """Render a Rich table of recorded events.
@@ -22,7 +25,9 @@ def _render_table(reporter, dry_run: bool) -> Table:  # type: ignore
     interface never appears visually "empty" and communicates dry-run mode.
     """
     mode = "DRY-RUN" if dry_run else "EXECUTE"
-    table = Table(title=f"AWSBreaker — Live events ({mode})")
+    all_events = reporter.snapshot()
+    events = all_events[-TAIL_COUNT:]
+    table = Table(title=f"AWSBreaker — Live events ({mode}, last {TAIL_COUNT})")
     table.add_column("Time", no_wrap=True, style="dim")
     table.add_column("Region", style="cyan")
     table.add_column("Service", style="magenta")
@@ -30,8 +35,7 @@ def _render_table(reporter, dry_run: bool) -> Table:  # type: ignore
     table.add_column("Action", style="yellow")
     table.add_column("ID", overflow="fold")
     table.add_column("Meta", overflow="fold")
-    events = reporter.snapshot()
-    if not events:
+    if not all_events:
         # Placeholder row communicates status instead of an empty table body
         table.add_row(
             "-",
@@ -43,6 +47,8 @@ def _render_table(reporter, dry_run: bool) -> Table:  # type: ignore
             "No resource events yet (dry run)" if dry_run else "No resource events yet",
         )
         return table
+    if len(all_events) > TAIL_COUNT:
+        table.caption = f"Showing last {TAIL_COUNT} of {len(all_events)} events"
 
     for e in events:
         meta = ""
@@ -63,6 +69,35 @@ def _render_table(reporter, dry_run: bool) -> Table:  # type: ignore
     return table
 
 
+def _render_summary_table(reporter, dry_run: bool) -> Table:  # type: ignore
+    """Render an aggregated summary of all recorded events.
+
+    Groups by (service, resource, action) and counts occurrences.
+    """
+    events = reporter.snapshot()
+    mode = "DRY-RUN" if dry_run else "EXECUTE"
+    table = Table(title=f"AWSBreaker — Summary ({mode})")
+    table.add_column("Service", style="magenta")
+    table.add_column("Resource", style="green")
+    table.add_column("Action", style="yellow")
+    table.add_column("Count", justify="right")
+    if not events:
+        table.add_row("-", "-", "-", "0")
+        return table
+    counts: dict[tuple[str, str, str], int] = {}
+    for e in events:
+        key = (
+            getattr(e, "service", ""),
+            getattr(e, "resource", ""),
+            getattr(e, "action", ""),
+        )
+        counts[key] = counts.get(key, 0) + 1
+    for svc, res, act in sorted(counts.keys()):
+        table.add_row(svc, res, act, str(counts[(svc, res, act)]))
+    table.caption = f"Total events: {len(events)}"
+    return table
+
+
 def _plain_stream(reporter):
     # Simple fallback printer if Rich isn't installed
     printed = 0
@@ -80,21 +115,36 @@ def _plain_stream(reporter):
 
 
 def run_cli(dry_run: bool | None = None, verbose: bool | None = None, no_progress: bool = False) -> None:
-    # Merge CLI overrides into config so logging respects verbosity
+    """Run the awsbreaker CLI with a live updating event tail and final summary."""
     overrides = {"dry_run": dry_run, "verbose": verbose}
     config = get_config(cli_args=overrides)
     setup_logging(config)
 
     dry_run_eff = dry_run if dry_run is not None else getattr(config, "dry_run", True)
-    verbose_eff = verbose if verbose is not None else bool(getattr(config, "verbose", False))
 
-    console = Console() if Console else None
+    console = Console()
 
-    if console:
-        banner = "AWSBreaker" if verbose_eff else "AWSBreaker"
-        console.print(f"[bold]{banner}[/bold]\nMode: {'DRY-RUN' if dry_run_eff else 'EXECUTE'}\n")
+    banner_text = "AWSBreaker"
+    credit_line = "Author: HYP3R00T  GitHub: https://github.com/HYP3R00T  Site: https://hyperoot.dev"
+
+    # Clear screen and show banner + credits once
+    try:
+        console.clear()
+    except Exception:
+        print("\033c", end="")
+
+    fig_rendered: str | None = None
+    try:
+        fig = Figlet(font="slant")
+        fig_rendered = fig.renderText(banner_text)
+    except Exception:
+        fig_rendered = None
+
+    if fig_rendered:
+        console.print(f"[bold cyan]{fig_rendered}[/bold cyan]")
     else:
-        print(f"AWSBreaker — Mode: {'DRY-RUN' if dry_run_eff else 'EXECUTE'}\n")
+        console.print(f"[bold]{banner_text}[/bold]")
+    console.print(f"{credit_line}\n")
 
     reporter = get_reporter()
 
@@ -111,7 +161,7 @@ def run_cli(dry_run: bool | None = None, verbose: bool | None = None, no_progres
     orb_thread.start()
 
     try:
-        if console and Live and Table and not no_progress:
+        if not no_progress:
             # Rich live table path
             with Live(_render_table(reporter, dry_run_eff), refresh_per_second=4, console=console) as live:
                 while orb_thread.is_alive():
@@ -123,19 +173,23 @@ def run_cli(dry_run: bool | None = None, verbose: bool | None = None, no_progres
             # Fallback plain streaming
             _plain_stream(reporter)
     except KeyboardInterrupt:
-        # user interrupted; continue to join the thread and exit cleanly
-        if console:
-            console.print("\nInterrupted by user. Waiting for tasks to stop...")
+        console.print("\nInterrupted by user. Waiting for tasks to stop...")
     finally:
         orb_thread.join(timeout=5)
         if orchestrator_exc:
             # re-raise first exception
             raise orchestrator_exc[0]
-        # final summary / flush reporter if desired
-        if console:
-            console.print("\nRun complete. Events recorded:", reporter.count())
+        # final summary: clear screen, show banner again, then summary only
+        try:
+            console.clear()
+        except Exception:
+            print("\033c", end="")
+        if fig_rendered:
+            console.print(f"[bold cyan]{fig_rendered}[/bold cyan]")
         else:
-            print("\nRun complete. Events recorded:", reporter.count())
+            console.print(f"[bold]{banner_text}[/bold]")
+        console.print(credit_line + "\n")
+        console.print(_render_summary_table(reporter, dry_run_eff))
 
 
 def app():
