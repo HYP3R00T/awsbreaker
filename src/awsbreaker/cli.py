@@ -1,5 +1,4 @@
-import sys
-
+import pyfiglet
 import typer
 
 from awsbreaker.conf.config import get_config
@@ -28,91 +27,17 @@ def run_cli(dry_run: bool | None, verbose: bool | None, no_progress: bool) -> No
     except Exception:
         console = None
 
-    # Header / credits (CLI only)
-    try:
-        import pyfiglet
+    if not verbose_eff:
+        banner = pyfiglet.figlet_format("AWSBreaker", font="slant")
 
-        if not verbose_eff:
-            banner = pyfiglet.figlet_format("AWSBreaker", font="slant")
-            if console:
-                console.print(banner.rstrip())
-                console.print("\nby HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-                console.print()
-            else:
-                print(banner.rstrip())
-                print("\nby HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-                print()
-        else:
-            if console:
-                console.print("Starting AWSBreaker")
-            else:
-                print("Starting AWSBreaker")
-    except Exception:
-        if console:
-            console.print("AWSBreaker")
-            console.print("by HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-            console.print()
-        else:
-            print("AWSBreaker")
-            print("by HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-            print()
-
-    if console:
-        console.print(f"Mode: {'DRY-RUN' if dry_run_eff else 'EXECUTE'}\n")
+        console.print(banner.rstrip())
+        console.print("\nby HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
+        console.print()
     else:
-        print(f"Mode: {'DRY-RUN' if dry_run_eff else 'EXECUTE'}\n")
+        console.print("Starting AWSBreaker")
+    print(f"Mode: {'DRY-RUN' if dry_run_eff else 'EXECUTE'}\n")
 
-    # Progress callback for non-verbose mode
-    last_len = 0
-
-    def progress_cb(stats: dict[str, int]) -> None:
-        if no_progress or verbose_eff:
-            return
-        nonlocal last_len
-        submitted = stats.get("submitted", 0)
-        completed = stats.get("completed", 0)
-        pending = stats.get("pending", 0)
-        failures = stats.get("failures", 0)
-        succeeded = stats.get("succeeded", 0)
-        deletions = stats.get("deletions", 0)
-        line = (
-            f"Progress: completed={completed}/{submitted} pending={pending} "
-            f"succeeded={succeeded} failures={failures} deletions={deletions}"
-        )
-        padded = line.ljust(last_len)
-        sys.stdout.write("\r" + padded)
-        sys.stdout.flush()
-        last_len = len(line)
-
-    summary = orchestrate_services(dry_run=dry_run_eff, progress_cb=progress_cb, print_summary=False)
-
-    if not no_progress and not verbose_eff and last_len > 0:
-        sys.stdout.write("\n")
-        sys.stdout.flush()
-
-    # Final summary
-    submitted = summary.get("submitted", 0)
-    skipped = summary.get("skipped", 0)
-    failures = summary.get("failures", 0)
-    succeeded = summary.get("succeeded", 0)
-    deletions = summary.get("deletions", 0)
-
-    if console:
-        console.print("\n[bold]Run Summary[/bold]")
-        console.print("-----------")
-        console.print(f"Tasks submitted   : {submitted}")
-        console.print(f"Tasks skipped     : {skipped}")
-        console.print(f"Tasks failed      : {failures}")
-        console.print(f"Tasks succeeded   : {succeeded}")
-        console.print(f"Total deletions   : {deletions}")
-    else:
-        print("\nRun Summary")
-        print("-----------")
-        print(f"Tasks submitted   : {submitted}")
-        print(f"Tasks skipped     : {skipped}")
-        print(f"Tasks failed      : {failures}")
-        print(f"Tasks succeeded   : {succeeded}")
-        print(f"Total deletions   : {deletions}")
+    orchestrate_services(dry_run=dry_run_eff)
 
 
 @app.callback(invoke_without_command=True)
