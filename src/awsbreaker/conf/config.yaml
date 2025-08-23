@@ -18,3 +18,7 @@ aws:
     # - all to scan for all services (WIP)
     - ec2
     - lambda
+reporting:
+  csv:
+    enabled: false
+    path: ~/.local/share/awsbreaker/reports/events.csv

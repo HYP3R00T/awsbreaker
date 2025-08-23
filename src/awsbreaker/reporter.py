@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import csv
 import threading
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +23,8 @@ class Reporter:
     def __init__(self) -> None:
         self._events: list[Event] = []
         self._events_lock = threading.Lock()
+        # Tracks how many events have been flushed to CSV for append mode logic
+        self._flushed_count = 0
 
     def record(
         self,
@@ -63,6 +67,37 @@ class Reporter:
         with self._events_lock:
             return len(self._events)
 
+    def write_csv(self, path: str | Path, overwrite: bool = True) -> Path:
+        """Write recorded events to a CSV file.
+
+        If overwrite is False subsequent calls will append only new events that
+        haven't already been flushed (tracked via an internal counter).
+        """
+        p = Path(path).expanduser()
+        p.parent.mkdir(parents=True, exist_ok=True)
+
+        mode = "w" if overwrite or not p.exists() else "a"
+        write_header = mode == "w" or not p.exists()
+
+        events = self.snapshot()
+        events_to_write = events if mode == "w" else events[self._flushed_count :]
+
+        fieldnames = ["timestamp", "region", "service", "resource", "action", "arn", "meta"]
+        with p.open(mode, newline="", encoding="utf-8") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            if write_header:
+                writer.writeheader()
+            for e in events_to_write:
+                row = asdict(e)
+                meta_val = row.get("meta") or {}
+                if isinstance(meta_val, dict):
+                    row["meta"] = ";".join(f"{k}={v}" for k, v in meta_val.items())
+                else:
+                    row["meta"] = str(meta_val)
+                writer.writerow(row)
+        self._flushed_count = len(events)
+        return p
+
 
 # Lazy singleton
 _reporter: Reporter | None = None
@@ -73,9 +108,3 @@ def get_reporter() -> Reporter:
     if _reporter is None:
         _reporter = Reporter()
     return _reporter
-
-
-class Sinks:
-    def __init__(
-        self,
-    ): ...  # export events details in various outputs like print (stdout), logging (based on logging config), csv, etc.

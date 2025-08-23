@@ -190,6 +190,16 @@ def run_cli(dry_run: bool | None = None, no_progress: bool = False) -> None:
             console.print(f"[bold]{banner_text}[/bold]")
         console.print(credit_line + "\n")
         console.print(_render_summary_table(reporter, dry_run_eff))
+        # Optional CSV export
+        try:
+            reporting_cfg = getattr(config, "reporting", None)
+            csv_cfg = getattr(reporting_cfg, "csv", None) if reporting_cfg else None
+            if csv_cfg and getattr(csv_cfg, "enabled", False):
+                path = getattr(csv_cfg, "path", "./events.csv")
+                saved = reporter.write_csv(path)
+                console.print(f"[green]Events exported to CSV:[/green] {saved}")
+        except Exception as exc:
+            console.print(f"[red]Failed to write CSV report: {exc}[/red]")
 
 
 def app():
