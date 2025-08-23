@@ -1,6 +1,5 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any
 
 from boto3.session import Session
 from botocore.exceptions import ClientError
@@ -8,20 +7,17 @@ from botocore.exceptions import ClientError
 from awsbreaker.reporter import get_reporter
 
 SERVICE: str = "ec2"
-RESOURCE: str = "instances"
+RESOURCE: str = "key_pair"
 logger = logging.getLogger(__name__)
 
 
-def catalog_key_pairs(session: Session, region: str) -> list:
-    reporter = get_reporter()
+def catalog_key_pairs(session: Session, region: str) -> list[str]:
     client = session.client(service_name="ec2", region_name=region)
 
-    arns: list[dict[str, Any]] = []
+    arns: list[str] = []
     try:
         keypairs = client.describe_key_pairs().get("KeyPairs", [])
         arns.extend([k.get("KeyPairId") for k in keypairs])
-        for arn in arns:
-            reporter.record(service=SERVICE, resource=RESOURCE, action="Delete", arn=arn)
     except ClientError as e:
         logger.error("[%s][ec2] Failed to describe key pairs: %s", region, e)
         arns = []
@@ -30,22 +26,37 @@ def catalog_key_pairs(session: Session, region: str) -> list:
 
 def cleanup_key_pair(session: Session, region: str, key_pair_id: str, dry_run: bool = True) -> None:
     reporter = get_reporter()
-    reporter.record(service=SERVICE, resource=RESOURCE, action="Delete", arn=key_pair_id)
+    action = "catalog" if dry_run else "delete"
+    status = "discovered" if dry_run else "executing"
+    reporter.record(
+        region,
+        SERVICE,
+        RESOURCE,
+        action,
+        arn=key_pair_id,
+        meta={"status": status, "dry_run": dry_run},
+    )
     client = session.client("ec2", region_name=region)
-    response = client.delete_key_pair(KeyPairId=key_pair_id, DryRun=dry_run)  # noqa: F841
-    # Response Syntax
-    # {
-    #     'Return': True|False,
-    #     'KeyPairId': 'string'
-    # }
+    try:
+        response = client.delete_key_pair(KeyPairId=key_pair_id, DryRun=dry_run)
+        logger.info(
+            "[%s][ec2][key_pair] delete requested key_pair_id=%s return=%s dry_run=%s",
+            region,
+            response.get("KeyPairId", key_pair_id),
+            response.get("Return"),
+            dry_run,
+        )
+    except ClientError as e:
+        code = e.response.get("Error", {}).get("Code") if hasattr(e, "response") else None
+        if dry_run and code == "DryRunOperation":
+            logger.info("[%s][ec2][key_pair] dry-run delete would succeed key_pair_id=%s", region, key_pair_id)
+        else:
+            logger.error("[%s][ec2][key_pair] delete failed key_pair_id=%s error=%s", region, key_pair_id, e)
 
 
 def cleanup_key_pairs(session: Session, region: str, dry_run: bool = True, max_workers: int = 1) -> None:
     arns: list = catalog_key_pairs(session=session, region=region)
     with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs: dict[Any, tuple[str, str]] = {}
-        for arn in arns:
-            fut = ex.submit(cleanup_key_pair, session, region, arn, dry_run)
-            futs.append(fut)
-        for f in as_completed(futs):
-            f.result()
+        futures = [ex.submit(cleanup_key_pair, session, region, arn, dry_run) for arn in arns]
+        for fut in as_completed(futures):
+            fut.result()
