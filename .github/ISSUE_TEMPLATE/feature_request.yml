@@ -22,7 +22,7 @@ body:
       label: Proposed Solution
       description: Describe the feature you'd like to see and how it should work.
       placeholder: |
-        - Add a new CLI flag `--verbose`
+        - Add a new config key for logging rotation
         - Automatically run `setup.sh` when...
     validations:
       required: true

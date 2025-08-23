@@ -80,3 +80,21 @@ def test_setup_logging_invalid_level_falls_back_to_info_file(tmp_path: Path):
         content = files[0].read_text()
         assert "INFO - hello info" in content
         assert "DEBUG - hello debug" not in content
+
+
+def test_setup_logging_disabled(tmp_path: Path, capsys):
+    class Cfg:
+        logging_level = "INFO"
+        logging = type("L", (), {"enabled": False, "dir": str(tmp_path)})()
+
+    with isolated_root_logger():
+        setup_logging(Cfg())
+        logger = logging.getLogger(__name__)
+        logger.info("hello info")
+
+        # No files should be created
+        files = list(tmp_path.glob("*.log"))
+        assert not files
+        # Also no console output
+        out = capsys.readouterr().out
+        assert out == ""

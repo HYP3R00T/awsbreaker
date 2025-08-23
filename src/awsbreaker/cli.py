@@ -114,9 +114,9 @@ def _plain_stream(reporter):
         return
 
 
-def run_cli(dry_run: bool | None = None, verbose: bool | None = None, no_progress: bool = False) -> None:
+def run_cli(dry_run: bool | None = None, no_progress: bool = False) -> None:
     """Run the awsbreaker CLI with a live updating event tail and final summary."""
-    overrides = {"dry_run": dry_run, "verbose": verbose}
+    overrides = {"dry_run": dry_run}
     config = get_config(cli_args=overrides)
     setup_logging(config)
 
@@ -196,14 +196,13 @@ def app():
     parser = argparse.ArgumentParser(prog="awsbreaker")
     parser.add_argument("--dry-run", action="store_true", default=None, help="Perform a dry run (default from config)")
     parser.add_argument("--execute", action="store_true", default=None, help="Execute deletions (overrides dry-run)")
-    parser.add_argument("--verbose", action="store_true", default=None, help="Verbose logging")
     parser.add_argument("--no-progress", action="store_true", default=False, help="Disable live progress UI")
     args = parser.parse_args()
 
     # normalize dry-run flag: --execute takes precedence
     dry = False if args.execute else True if args.dry_run else None
 
-    run_cli(dry_run=dry, verbose=args.verbose if args.verbose else None, no_progress=args.no_progress)
+    run_cli(dry_run=dry, no_progress=args.no_progress)
 
 
 if __name__ == "__main__":
