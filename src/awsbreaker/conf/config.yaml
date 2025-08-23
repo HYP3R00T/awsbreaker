@@ -3,6 +3,10 @@ logging:
   enabled: true
   level: INFO
   dir: ~/.local/share/awsbreaker/logs
+reporting:
+  csv:
+    enabled: true
+    path: ~/.local/share/awsbreaker/reports/events.csv
 aws:
   profile: default
   aws_access_key_id: "" # leave empty if using credentials file
@@ -18,7 +22,3 @@ aws:
     # - all to scan for all services (WIP)
     - ec2
     - lambda
-reporting:
-  csv:
-    enabled: false
-    path: ~/.local/share/awsbreaker/reports/events.csv
