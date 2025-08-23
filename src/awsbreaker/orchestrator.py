@@ -1,5 +1,6 @@
 import inspect
 import logging
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -7,7 +8,8 @@ from boto3.session import Session
 
 from awsbreaker.conf.config import get_config
 from awsbreaker.core.session_helper import create_aws_session
-from awsbreaker.reporter import get_reporter
+
+# Reporter no longer needed at service-level (resource handlers still record events)
 from awsbreaker.services.ec2 import cleanup_ec2
 
 logger = logging.getLogger(__name__)
@@ -30,67 +32,23 @@ def process_region_service(
     session: Session,
     region: str,
     service_key: str,
-    handler_entry: Any,
+    handler_entry: Callable,
     dry_run: bool,
-) -> tuple[str, str, int]:
+) -> None:
     logger.info("[%s][%s] Starting (dry_run=%s)", region, service_key, dry_run)
 
-    # Updated functional entrypoint: run(session, region, dry_run, **kwargs?) -> int|None We no longer pass a per-call reporter function; instead we record coarse events into the global reporter singleton.
+    # Updated functional entrypoint: run(session, region, dry_run, **kwargs?) -> int|None
+    # NOTE: Service-level reporter events removed to reduce output volume; resource-level handlers still record.
     if inspect.isfunction(handler_entry):
-        rep = get_reporter()
         try:
-            rep.record(
-                region,
-                service_key,
-                "service",
-                "start",
-                meta={"status": "running", "dry_run": dry_run},
-            )
             logger.info("[%s][%s] Executing service handler", region, service_key)
-            # Call handler with its known signature (session, region, dry_run, *optional)
-            deleted = handler_entry(session, region, dry_run)  # type: ignore[misc]
-        except TypeError:
-            # Fallback: some handlers may accept max_workers default param
-            try:
-                deleted = handler_entry(session=session, region=region, dry_run=dry_run)  # type: ignore[misc]
-            except Exception as e:  # pragma: no cover - bubble after logging
-                rep.record(
-                    region,
-                    service_key,
-                    "service",
-                    "error",
-                    meta={
-                        "status": "failed",
-                        "error": {"type": type(e).__name__, "message": str(e)},
-                        "dry_run": dry_run,
-                    },
-                )
-                logger.exception("[%s][%s] Entrypoint failed: %s", region, service_key, e)
-                raise
+            handler_entry(session=session, region=region, dry_run=dry_run)
         except Exception as e:
-            rep.record(
-                region,
-                service_key,
-                "service",
-                "error",
-                meta={
-                    "status": "failed",
-                    "error": {"type": type(e).__name__, "message": str(e)},
-                    "dry_run": dry_run,
-                },
-            )
-            logger.exception("[%s][%s] Entrypoint failed: %s", region, service_key, e)
+            logger.exception("[%s][%s] Failed: %s", region, service_key, e)
             raise
         else:
-            rep.record(
-                region,
-                service_key,
-                "service",
-                "finish",
-                meta={"status": "completed", "dry_run": dry_run},
-            )
             logger.info("[%s][%s] Finished", region, service_key)
-            return region, service_key, int(deleted or 0)
+        return
 
     raise TypeError(f"Unsupported handler type for service '{service_key}': {type(handler_entry)!r}")
 
@@ -167,37 +125,15 @@ def orchestrate_services(
         total_tasks = max(1, len(tasks))
         max_workers = min(32, total_tasks)
 
-    submitted = 0
-    failures = 0
-    deletions_total = 0
-    succeeded = 0
-
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map: dict[Any, tuple[str, str]] = {}
         for region, service_key, handler_entry in tasks:
             fut = executor.submit(process_region_service, session, region, service_key, handler_entry, dry_run)
             future_map[fut] = (region, service_key)
-            submitted += 1
 
-        completed = 0
         for future in as_completed(future_map):
             region, svc_name = future_map[future]
             try:
-                _region, _svc, deleted = future.result()
-                deletions_total += deleted
-                if deleted > 0:
-                    succeeded += 1
                 logger.info("[%s][%s] Task completed", region, svc_name)
             except Exception as e:
-                failures += 1
                 logger.exception("[%s][%s] Task failed: %s", region, svc_name, e)
-            finally:
-                completed += 1
-
-    return {
-        "submitted": submitted,
-        "skipped": skipped,
-        "failures": failures,
-        "succeeded": succeeded,
-        "deletions": deletions_total,
-    }
