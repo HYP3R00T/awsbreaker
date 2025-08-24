@@ -5,6 +5,7 @@ pre-commit = "latest"
 aws-cli = "latest"
 node = "lts"
 "ubi:pnpm/pnpm" = "latest"
+prettier = "latest"
 
 [settings]
 experimental = true

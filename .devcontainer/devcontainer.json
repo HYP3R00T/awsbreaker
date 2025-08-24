@@ -16,7 +16,8 @@
                 "charliermarsh.ruff",
                 "redhat.vscode-yaml",
                 "hverlin.mise-vscode",
-                "amazonwebservices.aws-toolkit-vscode"
+                "amazonwebservices.aws-toolkit-vscode",
+                "esbenp.prettier-vscode"
             ]
         }
     },
