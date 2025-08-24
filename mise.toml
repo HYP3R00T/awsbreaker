@@ -21,12 +21,12 @@ UV_LINK_MODE = "copy"
 _.path = ['{{config_root}}/node_modules/.bin']
 
 [tasks.run]
-description = "Run the awsbreaker app"
-run = "uv run python -m awsbreaker"
+description = "Run the costcutter app"
+run = "uv run python -m costcutter"
 
 [tasks.cli]
-description = "Run the AWSBreaker CLI (Typer) from local source"
-run = "uv run python -m awsbreaker.cli"
+description = "Run the CostCutter CLI (Typer) from local source"
+run = "uv run python -m costcutter.cli"
 
 [tasks.test]
 description = "Run unit tests"
@@ -34,7 +34,7 @@ run = "uv run pytest -q"
 
 [tasks.test_cov]
 description = "Run tests with coverage"
-run = "uv run pytest --cov=awsbreaker --cov-report=term-missing"
+run = "uv run pytest --cov=costcutter --cov-report=term-missing"
 
 [tasks.lint]
 description = "Run ruff linter"

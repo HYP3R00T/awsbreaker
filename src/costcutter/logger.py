@@ -62,7 +62,7 @@ def setup_logging(config: Any | None = None) -> None:
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            log_path = log_dir / f"awsbreaker_{ts}.log"
+            log_path = log_dir / f"costcutter_{ts}.log"
             fh = logging.FileHandler(log_path, encoding="utf-8")
             fh.setLevel(level)
             fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))

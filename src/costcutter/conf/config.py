@@ -10,7 +10,7 @@ import yaml
 
 BASE_DIR = Path(__file__).parent
 DEFAULT_CONFIG_PATH = BASE_DIR / "config.yaml"
-ENV_PREFIX = "AWSBREAKER_"
+ENV_PREFIX = "COSTCUTTER_"
 
 
 def load_file(path: Path) -> dict[str, Any]:
@@ -40,7 +40,7 @@ def _deep_update(dst: dict[str, Any], src: dict[str, Any]) -> dict[str, Any]:
 def _load_env(prefix: str = ENV_PREFIX) -> dict[str, Any]:
     """Load env vars with PREFIX_ into nested dict. Types inferred via YAML parser.
 
-    Example: AWSBREAKER_AWS__REGION=us-west-2 => {"aws": {"region": "us-west-2"}}
+    Example: COSTCUTTER_AWS__REGION=us-west-2 => {"aws": {"region": "us-west-2"}}
     """
     result: dict[str, Any] = {}
     for key, value in os.environ.items():
@@ -107,9 +107,9 @@ def get_config(cli_args: dict | None = None, config_file: Path | None = None) ->
     # 1) Defaults from bundled YAML
     merged: dict[str, Any] = load_file(DEFAULT_CONFIG_PATH)
 
-    # 2) Home overrides (~/.awsbreaker.{yaml,yml,toml,json})
+    # 2) Home overrides (~/.costcutter.{yaml,yml,toml,json})
     for ext in ("yaml", "yml", "toml", "json"):
-        home_file = Path.home() / f".awsbreaker.{ext}"
+        home_file = Path.home() / f".costcutter.{ext}"
         if home_file.exists():
             _deep_update(merged, load_file(home_file))
 

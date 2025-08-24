@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from awsbreaker.logger import setup_logging
+from costcutter.logger import setup_logging
 
 
 @contextmanager

@@ -1,4 +1,4 @@
-from awsbreaker.conf.config import (
+from costcutter.conf.config import (
     Config,
     get_config,
     reload_config,

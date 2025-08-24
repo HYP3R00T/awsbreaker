@@ -1,10 +1,10 @@
-# AWSBreaker
+# CostCutter
 
 > [!CAUTION]
-> AWSBreaker will delete AWS resources aggressively and indiscriminately once triggered.
+> CostCutter will delete AWS resources aggressively and indiscriminately once triggered.
 > This tool is designed for **students and experimenters** who are worried about accidental AWS costs.
 
-AWSBreaker is an **automated kill-switch for AWS accounts**.
+CostCutter is an **automated kill-switch for AWS accounts**.
 It monitors **AWS Budgets**, and when costs exceed predefined limits, it triggers automated cleanup of AWS resources to prevent unexpected charges.
 
 ## 🎯 Project Objectives

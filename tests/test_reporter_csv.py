@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from awsbreaker.reporter import Reporter
+from costcutter.reporter import Reporter
 
 
 def test_reporter_write_csv(tmp_path: Path):

@@ -16,7 +16,7 @@ jobs:
         with:
           filters: |
             src:
-              - "src/awsbreaker/**"
+              - "src/costcutter/**"
               - "tests/**"
               - ".github/workflows/lint.yaml"
 
