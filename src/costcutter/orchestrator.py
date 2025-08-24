@@ -6,11 +6,11 @@ from typing import Any
 
 from boto3.session import Session
 
-from awsbreaker.conf.config import get_config
-from awsbreaker.core.session_helper import create_aws_session
+from costcutter.conf.config import get_config
+from costcutter.core.session_helper import create_aws_session
 
 # Reporter no longer needed at service-level (resource handlers still record events)
-from awsbreaker.services.ec2 import cleanup_ec2
+from costcutter.services.ec2 import cleanup_ec2
 
 logger = logging.getLogger(__name__)
 

@@ -11,10 +11,10 @@ from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 
-from awsbreaker.conf.config import get_config
-from awsbreaker.logger import setup_logging
-from awsbreaker.orchestrator import orchestrate_services
-from awsbreaker.reporter import get_reporter
+from costcutter.conf.config import get_config
+from costcutter.logger import setup_logging
+from costcutter.orchestrator import orchestrate_services
+from costcutter.reporter import get_reporter
 
 TAIL_COUNT = 10  # number of most recent events to display
 

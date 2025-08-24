@@ -1,7 +1,7 @@
 from boto3.session import Session
 
-from awsbreaker.services.ec2.instances import cleanup_instances
-from awsbreaker.services.ec2.key_pairs import cleanup_key_pairs
+from costcutter.services.ec2.instances import cleanup_instances
+from costcutter.services.ec2.key_pairs import cleanup_key_pairs
 
 _HANDLERS = {"instances": cleanup_instances, "key_pairs": cleanup_key_pairs}
 

@@ -1,9 +1,9 @@
 import logging
 from typing import Any
 
-from awsbreaker.conf.config import get_config
-from awsbreaker.logger import setup_logging
-from awsbreaker.orchestrator import orchestrate_services
+from costcutter.conf.config import get_config
+from costcutter.logger import setup_logging
+from costcutter.orchestrator import orchestrate_services
 
 logger = logging.getLogger(__name__)
 
