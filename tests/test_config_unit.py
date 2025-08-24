@@ -79,15 +79,23 @@ def test_config_wrapper_access_and_to_dict() -> None:
 
 def test_singleton_and_reload(monkeypatch: pytest.MonkeyPatch) -> None:
     # Initial config from env
+    import awsbreaker.conf.config as config_mod
+
     monkeypatch.setenv("AWSBREAKER_TIMEOUT", "7")
-    cfg1 = get_config()
+    config_mod._settings = None
+    cfg1 = config_mod.get_config()
     assert cfg1.timeout == 7
 
     # Change env; cached singleton should not change until reload
     monkeypatch.setenv("AWSBREAKER_TIMEOUT", "8")
-    cfg2 = get_config()
+    cfg2 = config_mod.get_config()
     assert cfg2 is cfg1
     assert cfg2.timeout == 7
+
+    # After reload, should pick up new value
+    config_mod._settings = None
+    cfg3 = config_mod.get_config()
+    assert cfg3.timeout == 8
 
     # After reload, new value should be reflected
     reload_config()
