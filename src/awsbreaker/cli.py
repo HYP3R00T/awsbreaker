@@ -1,11 +1,12 @@
 # src/awsbreaker/cli.py
 from __future__ import annotations
 
-import argparse
 import threading
 import time
+from pathlib import Path
 
-from pyfiglet import Figlet  # type: ignore
+import typer
+from pyfiglet import Figlet
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
@@ -18,7 +19,7 @@ from awsbreaker.reporter import get_reporter
 TAIL_COUNT = 10  # number of most recent events to display
 
 
-def _render_table(reporter, dry_run: bool) -> Table:  # type: ignore
+def _render_table(reporter, dry_run: bool) -> Table:
     """Render a Rich table of recorded events.
 
     Adds a placeholder row while no events have been recorded yet so the
@@ -69,7 +70,7 @@ def _render_table(reporter, dry_run: bool) -> Table:  # type: ignore
     return table
 
 
-def _render_summary_table(reporter, dry_run: bool) -> Table:  # type: ignore
+def _render_summary_table(reporter, dry_run: bool) -> Table:
     """Render an aggregated summary of all recorded events.
 
     Groups by (service, resource, action) and counts occurrences.
@@ -98,26 +99,13 @@ def _render_summary_table(reporter, dry_run: bool) -> Table:  # type: ignore
     return table
 
 
-def _plain_stream(reporter):
-    # Simple fallback printer if Rich isn't installed
-    printed = 0
-    try:
-        while True:
-            events = reporter.snapshot()
-            if len(events) > printed:
-                for e in events[printed:]:
-                    meta = ", ".join(f"{k}={v}" for k, v in (e.meta or {}).items())
-                    print(f"[{e.timestamp}] {e.region} {e.service}/{e.resource} {e.action} id={e.arn or ''} {meta}")
-                printed = len(events)
-            time.sleep(0.5)
-    except KeyboardInterrupt:
-        return
+def run_cli(dry_run: bool | None = None, config_file: Path | None = None) -> None:
+    """Run the awsbreaker CLI with a live updating event tail and final summary.
 
-
-def run_cli(dry_run: bool | None = None, no_progress: bool = False) -> None:
-    """Run the awsbreaker CLI with a live updating event tail and final summary."""
+    The CLI now always shows the Rich live progress UI; simplified per design change.
+    """
     overrides = {"dry_run": dry_run}
-    config = get_config(cli_args=overrides)
+    config = get_config(cli_args=overrides, config_file=config_file)
     setup_logging(config)
 
     dry_run_eff = dry_run if dry_run is not None else getattr(config, "dry_run", True)
@@ -161,17 +149,13 @@ def run_cli(dry_run: bool | None = None, no_progress: bool = False) -> None:
     orb_thread.start()
 
     try:
-        if not no_progress:
-            # Rich live table path
-            with Live(_render_table(reporter, dry_run_eff), refresh_per_second=4, console=console) as live:
-                while orb_thread.is_alive():
-                    live.update(_render_table(reporter, dry_run_eff))
-                    time.sleep(0.25)
-                # final update
+        # Rich live table path (always enabled now)
+        with Live(_render_table(reporter, dry_run_eff), refresh_per_second=4, console=console) as live:
+            while orb_thread.is_alive():
                 live.update(_render_table(reporter, dry_run_eff))
-        else:
-            # Fallback plain streaming
-            _plain_stream(reporter)
+                time.sleep(0.25)
+            # final update
+            live.update(_render_table(reporter, dry_run_eff))
     except KeyboardInterrupt:
         console.print("\nInterrupted by user. Waiting for tasks to stop...")
     finally:
@@ -190,7 +174,6 @@ def run_cli(dry_run: bool | None = None, no_progress: bool = False) -> None:
             console.print(f"[bold]{banner_text}[/bold]")
         console.print(credit_line + "\n")
         console.print(_render_summary_table(reporter, dry_run_eff))
-        # Optional CSV export
         try:
             reporting_cfg = getattr(config, "reporting", None)
             csv_cfg = getattr(reporting_cfg, "csv", None) if reporting_cfg else None
@@ -202,17 +185,21 @@ def run_cli(dry_run: bool | None = None, no_progress: bool = False) -> None:
             console.print(f"[red]Failed to write CSV report: {exc}[/red]")
 
 
-def app():
-    parser = argparse.ArgumentParser(prog="awsbreaker")
-    parser.add_argument("--dry-run", action="store_true", default=None, help="Perform a dry run (default from config)")
-    parser.add_argument("--execute", action="store_true", default=None, help="Execute deletions (overrides dry-run)")
-    parser.add_argument("--no-progress", action="store_true", default=False, help="Disable live progress UI")
-    args = parser.parse_args()
+app = typer.Typer(help="AWSBreaker – Kill-switch style cleanup tool for AWS resources.")
 
-    # normalize dry-run flag: --execute takes precedence
-    dry = False if args.execute else True if args.dry_run else None
 
-    run_cli(dry_run=dry, no_progress=args.no_progress)
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    dry_run: bool | None = None,
+    config: Path | None = None,
+):
+    """Run AWSBreaker (no subcommands yet)."""
+    if config is not None and config.suffix.lower() not in {".yaml", ".yml", ".toml", ".json"}:
+        raise typer.BadParameter("Config file must be one of: .yaml, .yml, .toml, .json")
+    run_cli(dry_run=dry_run, config_file=config)
+    if ctx.invoked_subcommand is None:
+        return
 
 
 if __name__ == "__main__":
