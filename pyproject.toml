@@ -1,6 +1,6 @@
 [project]
 name = "awsbreaker"
-version = "0.1.0"
+version = "0.1.1"
 description = "A kill-switch for AWS that automatically deletes resources when spending limits are breached."
 readme = "README.md"
 license = { file = "LICENSE" }
