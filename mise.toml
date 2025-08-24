@@ -3,9 +3,13 @@ python = "3.13"
 uv = "latest"
 pre-commit = "latest"
 aws-cli = "latest"
+node = "lts"
+"ubi:pnpm/pnpm" = "latest"
+prettier = "latest"
 
 [settings]
 experimental = true
+lockfile = true
 python.uv_venv_auto = true
 idiomatic_version_file_enable_tools = ["python"]
 
@@ -14,6 +18,7 @@ enter = "bash ./scripts/setup_project.sh"
 
 [env]
 UV_LINK_MODE = "copy"
+_.path = ['{{config_root}}/node_modules/.bin']
 
 [tasks.run]
 description = "Run the awsbreaker app"
@@ -42,3 +47,7 @@ run = "uv run ruff format ."
 [tasks.fix]
 description = "Auto-fix issues with ruff and format"
 run = ["uv run ruff check --fix .", "uv run ruff format ."]
+
+[tasks.docs]
+description = "Docs dev Mode"
+run = "vitepress dev docs --host 0.0.0.0 --port 5555 --cors"

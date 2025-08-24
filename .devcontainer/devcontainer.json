@@ -16,11 +16,15 @@
                 "charliermarsh.ruff",
                 "redhat.vscode-yaml",
                 "hverlin.mise-vscode",
-                "amazonwebservices.aws-toolkit-vscode"
+                "amazonwebservices.aws-toolkit-vscode",
+                "esbenp.prettier-vscode"
             ]
         }
     },
     "mounts": [
         "source=${localEnv:HOME}/.aws,target=/home/vscode/.aws,type=bind"
+    ],
+    "forwardPorts": [
+        5555
     ]
 }
