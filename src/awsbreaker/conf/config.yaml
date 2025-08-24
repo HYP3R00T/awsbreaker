@@ -1,9 +1,12 @@
 dry_run: true
-verbose: false # when true, enables console logs; level is controlled by logging.level
 logging:
+  enabled: false
   level: INFO
-  file_enabled: false
   dir: ~/.local/share/awsbreaker/logs
+reporting:
+  csv:
+    enabled: false
+    path: ~/.local/share/awsbreaker/reports/events.csv
 aws:
   profile: default
   aws_access_key_id: "" # leave empty if using credentials file

@@ -1,143 +1,205 @@
-import sys
+# src/awsbreaker/cli.py
+from __future__ import annotations
+
+import threading
+import time
+from pathlib import Path
 
 import typer
+from pyfiglet import Figlet
+from rich.console import Console
+from rich.live import Live
+from rich.table import Table
 
 from awsbreaker.conf.config import get_config
 from awsbreaker.logger import setup_logging
 from awsbreaker.orchestrator import orchestrate_services
+from awsbreaker.reporter import get_reporter
 
-app = typer.Typer(help="AWSBreaker — kill-switch for AWS resources when spending limits are breached.")
+TAIL_COUNT = 10  # number of most recent events to display
 
 
-def run_cli(dry_run: bool | None, verbose: bool | None, no_progress: bool) -> None:
-    """Execute the CLI flow with presentation, progress, and summary."""
-    # Merge CLI overrides into config so logging respects verbosity
-    overrides = {"dry_run": dry_run, "verbose": verbose}
-    config = get_config(cli_args=overrides)
+def _render_table(reporter, dry_run: bool) -> Table:
+    """Render a Rich table of recorded events.
+
+    Adds a placeholder row while no events have been recorded yet so the
+    interface never appears visually "empty" and communicates dry-run mode.
+    """
+    mode = "DRY-RUN" if dry_run else "EXECUTE"
+    all_events = reporter.snapshot()
+    events = all_events[-TAIL_COUNT:]
+    table = Table(title=f"AWSBreaker — Live events ({mode}, last {TAIL_COUNT})")
+    table.add_column("Time", no_wrap=True, style="dim")
+    table.add_column("Region", style="cyan")
+    table.add_column("Service", style="magenta")
+    table.add_column("Resource", style="green")
+    table.add_column("Action", style="yellow")
+    table.add_column("ID", overflow="fold")
+    table.add_column("Meta", overflow="fold")
+    if not all_events:
+        # Placeholder row communicates status instead of an empty table body
+        table.add_row(
+            "-",
+            "-",
+            "-",
+            "-",
+            "waiting",
+            "-",
+            "No resource events yet (dry run)" if dry_run else "No resource events yet",
+        )
+        return table
+    if len(all_events) > TAIL_COUNT:
+        table.caption = f"Showing last {TAIL_COUNT} of {len(all_events)} events"
+
+    for e in events:
+        meta = ""
+        try:
+            # keep meta compact
+            meta = ", ".join(f"{k}={v}" for k, v in (e.meta or {}).items())
+        except Exception:
+            meta = str(e.meta)
+        table.add_row(
+            getattr(e, "timestamp", ""),
+            getattr(e, "region", ""),
+            getattr(e, "service", ""),
+            getattr(e, "resource", ""),
+            getattr(e, "action", ""),
+            getattr(e, "arn", "") or "",
+            meta,
+        )
+    return table
+
+
+def _render_summary_table(reporter, dry_run: bool) -> Table:
+    """Render an aggregated summary of all recorded events.
+
+    Groups by (service, resource, action) and counts occurrences.
+    """
+    events = reporter.snapshot()
+    mode = "DRY-RUN" if dry_run else "EXECUTE"
+    table = Table(title=f"AWSBreaker — Summary ({mode})")
+    table.add_column("Service", style="magenta")
+    table.add_column("Resource", style="green")
+    table.add_column("Action", style="yellow")
+    table.add_column("Count", justify="right")
+    if not events:
+        table.add_row("-", "-", "-", "0")
+        return table
+    counts: dict[tuple[str, str, str], int] = {}
+    for e in events:
+        key = (
+            getattr(e, "service", ""),
+            getattr(e, "resource", ""),
+            getattr(e, "action", ""),
+        )
+        counts[key] = counts.get(key, 0) + 1
+    for svc, res, act in sorted(counts.keys()):
+        table.add_row(svc, res, act, str(counts[(svc, res, act)]))
+    table.caption = f"Total events: {len(events)}"
+    return table
+
+
+def run_cli(dry_run: bool | None = None, config_file: Path | None = None) -> None:
+    """Run the awsbreaker CLI with a live updating event tail and final summary.
+
+    The CLI now always shows the Rich live progress UI; simplified per design change.
+    """
+    overrides = {"dry_run": dry_run}
+    config = get_config(cli_args=overrides, config_file=config_file)
     setup_logging(config)
 
-    # Resolve effective flags
     dry_run_eff = dry_run if dry_run is not None else getattr(config, "dry_run", True)
-    verbose_eff = verbose if verbose is not None else bool(getattr(config, "verbose", False))
 
-    # Lazy import rich; fall back to plain print if unavailable
+    console = Console()
+
+    banner_text = "AWSBreaker"
+    credit_line = "Author: HYP3R00T  GitHub: https://github.com/HYP3R00T  Site: https://hyperoot.dev"
+
+    # Clear screen and show banner + credits once
     try:
-        from rich.console import Console
-
-        console = Console()
+        console.clear()
     except Exception:
-        console = None
+        print("\033c", end="")
 
-    # Header / credits (CLI only)
+    fig_rendered: str | None = None
     try:
-        import pyfiglet
-
-        if not verbose_eff:
-            banner = pyfiglet.figlet_format("AWSBreaker", font="slant")
-            if console:
-                console.print(banner.rstrip())
-                console.print("\nby HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-                console.print()
-            else:
-                print(banner.rstrip())
-                print("\nby HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-                print()
-        else:
-            if console:
-                console.print("Starting AWSBreaker")
-            else:
-                print("Starting AWSBreaker")
+        fig = Figlet(font="slant")
+        fig_rendered = fig.renderText(banner_text)
     except Exception:
-        if console:
-            console.print("AWSBreaker")
-            console.print("by HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-            console.print()
+        fig_rendered = None
+
+    if fig_rendered:
+        console.print(f"[bold cyan]{fig_rendered}[/bold cyan]")
+    else:
+        console.print(f"[bold]{banner_text}[/bold]")
+    console.print(f"{credit_line}\n")
+
+    reporter = get_reporter()
+
+    # Orchestrator runs in separate thread so Live table can update on main thread
+    orchestrator_exc: list[Exception] = []
+
+    def _run_orchestrator():
+        try:
+            orchestrate_services(dry_run=dry_run_eff)
+        except Exception as exc:
+            orchestrator_exc.append(exc)
+
+    orb_thread = threading.Thread(target=_run_orchestrator, daemon=True)
+    orb_thread.start()
+
+    try:
+        # Rich live table path (always enabled now)
+        with Live(_render_table(reporter, dry_run_eff), refresh_per_second=4, console=console) as live:
+            while orb_thread.is_alive():
+                live.update(_render_table(reporter, dry_run_eff))
+                time.sleep(0.25)
+            # final update
+            live.update(_render_table(reporter, dry_run_eff))
+    except KeyboardInterrupt:
+        console.print("\nInterrupted by user. Waiting for tasks to stop...")
+    finally:
+        orb_thread.join(timeout=5)
+        if orchestrator_exc:
+            # re-raise first exception
+            raise orchestrator_exc[0]
+        # final summary: clear screen, show banner again, then summary only
+        try:
+            console.clear()
+        except Exception:
+            print("\033c", end="")
+        if fig_rendered:
+            console.print(f"[bold cyan]{fig_rendered}[/bold cyan]")
         else:
-            print("AWSBreaker")
-            print("by HYP3R00T  |  https://hyperoot.dev  |  https://github.com/HYP3R00T")
-            print()
+            console.print(f"[bold]{banner_text}[/bold]")
+        console.print(credit_line + "\n")
+        console.print(_render_summary_table(reporter, dry_run_eff))
+        try:
+            reporting_cfg = getattr(config, "reporting", None)
+            csv_cfg = getattr(reporting_cfg, "csv", None) if reporting_cfg else None
+            if csv_cfg and getattr(csv_cfg, "enabled", False):
+                path = getattr(csv_cfg, "path", "./events.csv")
+                saved = reporter.write_csv(path)
+                console.print(f"[green]Events exported to CSV:[/green] {saved}")
+        except Exception as exc:
+            console.print(f"[red]Failed to write CSV report: {exc}[/red]")
 
-    if console:
-        console.print(f"Mode: {'DRY-RUN' if dry_run_eff else 'EXECUTE'}\n")
-    else:
-        print(f"Mode: {'DRY-RUN' if dry_run_eff else 'EXECUTE'}\n")
 
-    # Progress callback for non-verbose mode
-    last_len = 0
-
-    def progress_cb(stats: dict[str, int]) -> None:
-        if no_progress or verbose_eff:
-            return
-        nonlocal last_len
-        submitted = stats.get("submitted", 0)
-        completed = stats.get("completed", 0)
-        pending = stats.get("pending", 0)
-        failures = stats.get("failures", 0)
-        succeeded = stats.get("succeeded", 0)
-        deletions = stats.get("deletions", 0)
-        line = (
-            f"Progress: completed={completed}/{submitted} pending={pending} "
-            f"succeeded={succeeded} failures={failures} deletions={deletions}"
-        )
-        padded = line.ljust(last_len)
-        sys.stdout.write("\r" + padded)
-        sys.stdout.flush()
-        last_len = len(line)
-
-    summary = orchestrate_services(dry_run=dry_run_eff, progress_cb=progress_cb, print_summary=False)
-
-    if not no_progress and not verbose_eff and last_len > 0:
-        sys.stdout.write("\n")
-        sys.stdout.flush()
-
-    # Final summary
-    submitted = summary.get("submitted", 0)
-    skipped = summary.get("skipped", 0)
-    failures = summary.get("failures", 0)
-    succeeded = summary.get("succeeded", 0)
-    deletions = summary.get("deletions", 0)
-
-    if console:
-        console.print("\n[bold]Run Summary[/bold]")
-        console.print("-----------")
-        console.print(f"Tasks submitted   : {submitted}")
-        console.print(f"Tasks skipped     : {skipped}")
-        console.print(f"Tasks failed      : {failures}")
-        console.print(f"Tasks succeeded   : {succeeded}")
-        console.print(f"Total deletions   : {deletions}")
-    else:
-        print("\nRun Summary")
-        print("-----------")
-        print(f"Tasks submitted   : {submitted}")
-        print(f"Tasks skipped     : {skipped}")
-        print(f"Tasks failed      : {failures}")
-        print(f"Tasks succeeded   : {succeeded}")
-        print(f"Total deletions   : {deletions}")
+app = typer.Typer(help="AWSBreaker – Kill-switch style cleanup tool for AWS resources.")
 
 
 @app.callback(invoke_without_command=True)
 def main(
-    dry_run: bool | None = typer.Option(
-        None,
-        "--dry-run/--execute",
-        help="Run in dry-run mode (default from config). Use --execute to actually delete resources.",
-    ),
-    verbose: bool | None = typer.Option(
-        None,
-        "--verbose/--quiet",
-        help="Enable verbose logging (default from config).",
-    ),
-    no_progress: bool = typer.Option(
-        False,
-        "--no-progress",
-        is_flag=True,
-        help="Disable the compact live progress line.",
-    ),
+    ctx: typer.Context,
+    dry_run: bool | None = None,
+    config: Path | None = None,
 ):
-    """
-    Runs AWSBreaker. If subcommands are added later, this acts as the default.
-    """
-    run_cli(dry_run=dry_run, verbose=verbose, no_progress=no_progress)
+    """Run AWSBreaker (no subcommands yet)."""
+    if config is not None and config.suffix.lower() not in {".yaml", ".yml", ".toml", ".json"}:
+        raise typer.BadParameter("Config file must be one of: .yaml, .yml, .toml, .json")
+    run_cli(dry_run=dry_run, config_file=config)
+    if ctx.invoked_subcommand is None:
+        return
 
 
 if __name__ == "__main__":

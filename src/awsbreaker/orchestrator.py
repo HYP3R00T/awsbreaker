@@ -4,18 +4,21 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from boto3.session import Session
+
 from awsbreaker.conf.config import get_config
 from awsbreaker.core.session_helper import create_aws_session
-from awsbreaker.services import ec2_service as ec2_service
-from awsbreaker.services import lambda_service as lambda_service
+
+# Reporter no longer needed at service-level (resource handlers still record events)
+from awsbreaker.services.ec2 import cleanup_ec2
 
 logger = logging.getLogger(__name__)
 
 SERVICE_HANDLERS = {
     # Each value can be a functional entrypoint `run(session, region, dry_run, reporter)`
-    "ec2": ec2_service.run,
-    "lambda": lambda_service.run,
-    # Add other services here, e.g., "s3": s3_service.run
+    "ec2": cleanup_ec2,
+    # "s3": cleanup_s3
+    # "lambda": cleanup_lambda,
 }
 
 
@@ -25,84 +28,33 @@ def _service_supported_in_region(available_regions_map: dict[str, set[str]], ser
     return True if regions is None else region in regions
 
 
-def _make_reporter(region: str, service: str):
-    """Create a reporter callable for consistent event logging across services.
-
-    The reporter expects a dict event with keys like phase, resource_type, id, name, action, status, reason, extra.
-    """
-
-    def reporter(event: dict[str, Any]) -> None:
-        phase = event.get("phase", "").upper()
-        rtype = event.get("resource_type", "?")
-        rid = event.get("id") or event.get("arn") or "?"
-        name = event.get("name")
-        action = event.get("action")
-        status = event.get("status")
-        reason = event.get("reason")
-        extra = event.get("extra") or {}
-        # Flatten a few extras into k=v for readability
-        extra_str = " ".join(f"{k}={v}" for k, v in extra.items()) if extra else ""
-        parts = [
-            f"[{region}]",
-            f"[{service}]",
-            f"[{phase}]",
-            f"[{rtype}]",
-            f"id={rid}",
-        ]
-        if name:
-            parts.append(f"name={name}")
-        if action:
-            parts.append(f"action={action}")
-        if status:
-            parts.append(f"status={status}")
-        if reason:
-            parts.append(f"reason={reason}")
-        if extra_str:
-            parts.append(extra_str)
-        logger.info(" ".join(parts))
-
-    return reporter
-
-
 def process_region_service(
-    session: Any,
+    session: Session,
     region: str,
     service_key: str,
-    handler_entry: Any,
+    handler_entry: Callable,
     dry_run: bool,
-) -> tuple[str, str, int]:
-    service_name = service_key
-    logger.info("[%s][%s] Starting (dry_run=%s)", region, service_name, dry_run)
+) -> None:
+    logger.info("[%s][%s] Starting (dry_run=%s)", region, service_key, dry_run)
 
-    # Functional entrypoint: run(session, region, dry_run, reporter) -> int (deletions)
+    # Updated functional entrypoint: run(session, region, dry_run, **kwargs?) -> int|None
+    # NOTE: Service-level reporter events removed to reduce output volume; resource-level handlers still record.
     if inspect.isfunction(handler_entry):
-        reporter = _make_reporter(region, service_name)
         try:
-            logger.info("[%s][%s] Planning/Executing via functional entrypoint", region, service_name)
-            deleted = handler_entry(session, region, dry_run, reporter)  # type: ignore[call-arg]
+            logger.info("[%s][%s] Executing service handler", region, service_key)
+            handler_entry(session=session, region=region, dry_run=dry_run)
         except Exception as e:
-            logger.exception("[%s][%s] Entrypoint failed: %s", region, service_name, e)
+            logger.exception("[%s][%s] Failed: %s", region, service_key, e)
             raise
-        logger.info("[%s][%s] Finished", region, service_name)
-        return region, service_name, int(deleted or 0)
-
-    # Legacy class-based handler support (for backward compatibility/testing)
-    if inspect.isclass(handler_entry):
-        handler = handler_entry(session, region, dry_run)
-        logger.info("[%s][%s] Scanning", region, service_name)
-        resources = handler.scan_resources()
-        logger.info("[%s][%s] %d resource(s) found", region, service_name, len(resources))
-        deleted = handler.delete_resources(resources)
-        logger.info("[%s][%s] Finished", region, service_name)
-        return region, service_name, int(deleted or 0)
+        else:
+            logger.info("[%s][%s] Finished", region, service_key)
+        return
 
     raise TypeError(f"Unsupported handler type for service '{service_key}': {type(handler_entry)!r}")
 
 
 def orchestrate_services(
     dry_run: bool = False,
-    progress_cb: Callable[[dict[str, int]], None] | None = None,
-    print_summary: bool = True,
 ) -> dict[str, int]:
     config = get_config()
 
@@ -173,59 +125,15 @@ def orchestrate_services(
         total_tasks = max(1, len(tasks))
         max_workers = min(32, total_tasks)
 
-    submitted = 0
-    failures = 0
-    deletions_total = 0
-    succeeded = 0
-
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map: dict[Any, tuple[str, str]] = {}
         for region, service_key, handler_entry in tasks:
             fut = executor.submit(process_region_service, session, region, service_key, handler_entry, dry_run)
             future_map[fut] = (region, service_key)
-            submitted += 1
 
-        # Initial progress update
-        if progress_cb:
-            progress_cb({
-                "submitted": submitted,
-                "skipped": skipped,
-                "failures": failures,
-                "succeeded": succeeded,
-                "deletions": deletions_total,
-                "completed": 0,
-                "pending": len(future_map),
-            })
-
-        completed = 0
         for future in as_completed(future_map):
             region, svc_name = future_map[future]
             try:
-                _region, _svc, deleted = future.result()
-                deletions_total += deleted
-                if deleted > 0:
-                    succeeded += 1
                 logger.info("[%s][%s] Task completed", region, svc_name)
             except Exception as e:
-                failures += 1
                 logger.exception("[%s][%s] Task failed: %s", region, svc_name, e)
-            finally:
-                completed += 1
-                if progress_cb:
-                    progress_cb({
-                        "submitted": submitted,
-                        "skipped": skipped,
-                        "failures": failures,
-                        "succeeded": succeeded,
-                        "deletions": deletions_total,
-                        "completed": completed,
-                        "pending": max(0, len(future_map) - completed),
-                    })
-
-    return {
-        "submitted": submitted,
-        "skipped": skipped,
-        "failures": failures,
-        "succeeded": succeeded,
-        "deletions": deletions_total,
-    }
