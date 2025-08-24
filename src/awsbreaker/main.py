@@ -30,7 +30,7 @@ def run(dry_run: bool | None = None) -> dict[str, Any]:
     dry_run_eff = dry_run if dry_run is not None else getattr(config, "dry_run", True)
 
     # Execute without progress reporting or printing; rely on logging instead
-    summary = orchestrate_services(dry_run=dry_run_eff, progress_cb=None, print_summary=False)
+    summary = orchestrate_services(dry_run=dry_run_eff)
     return summary
 
 
