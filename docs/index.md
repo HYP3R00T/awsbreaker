@@ -8,14 +8,14 @@ hero:
   tagline: "Automate cleanup and reporting for AWS resources."
   actions:
     - theme: brand
-      text: What is AWSBreaker?
-      link: /guide/what-is-awsbreaker
+      text: What is CostCutter?
+      link: /guide/what-is-costcutter
     - theme: alt
       text: Quickstart
       link: /config-reference
     - theme: alt
       text: GitHub
-      link: https://github.com/HYP3R00T/awsbreaker
+      link: https://github.com/HYP3R00T/costcutter
 
 features:
   - icon: ⚡

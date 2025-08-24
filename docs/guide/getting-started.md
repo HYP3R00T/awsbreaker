@@ -2,7 +2,7 @@
 
 ## Installation: uv
 
-Before running `awsbreaker`, you need to install `uv` (the Python package manager and runner). To install `uv`, run:
+Before running `costcutter`, you need to install `uv` (the Python package manager and runner). To install `uv`, run:
 
 ```sh
 curl -Ls https://astral.sh/uv/install.sh | sh
@@ -20,12 +20,12 @@ For more installation details, check out the official guide: [Installing uv](htt
 
 ---
 
-## Getting Started with `awsbreaker`
+## Getting Started with `costcutter`
 
-To quickly run `awsbreaker`, use the following command:
+To quickly run `costcutter`, use the following command:
 
 ```sh
-uvx awsbreaker --help
+uvx costcutter --help
 ```
 
 This will launch the tool using the uvx runner. Make sure you have all dependencies installed (see the main README for setup instructions).

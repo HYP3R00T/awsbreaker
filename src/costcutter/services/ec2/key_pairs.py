@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from boto3.session import Session
 from botocore.exceptions import ClientError
 
-from awsbreaker.reporter import get_reporter
+from costcutter.reporter import get_reporter
 
 SERVICE: str = "ec2"
 RESOURCE: str = "key_pair"

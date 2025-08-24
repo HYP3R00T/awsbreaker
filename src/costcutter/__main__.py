@@ -1,5 +1,5 @@
 """
-Entrypoint for running awsbreaker as a module.
+Entrypoint for running costcutter as a module.
 """
 
 from .main import main

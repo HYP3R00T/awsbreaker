@@ -8,14 +8,14 @@ export default defineConfig({
     // https://vitepress.dev/reference/default-theme-config
     nav: [
       { text: "Home", link: "/" },
-      { text: "Guide", link: "/guide/what-is-awsbreaker" },
+      { text: "Guide", link: "/guide/what-is-costcutter" },
     ],
 
     sidebar: [
       {
         text: "Introduction",
         items: [
-          { text: "What is AWSBreaker?", link: "/guide/what-is-awsbreaker" },
+          { text: "What is CostCutter?", link: "/guide/what-is-costcutter" },
           { text: "Getting Started", link: "/guide/getting-started" },
           { text: "Usage (CLI)", link: "/usage-cli" },
         ],
@@ -27,7 +27,7 @@ export default defineConfig({
     ],
 
     socialLinks: [
-      { icon: "github", link: "https://github.com/HYP3R00T/awsbreaker" },
+      { icon: "github", link: "https://github.com/HYP3R00T/costcutter" },
     ],
   },
 });

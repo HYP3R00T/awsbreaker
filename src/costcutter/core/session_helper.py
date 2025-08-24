@@ -4,7 +4,7 @@ import os
 import boto3
 from boto3.session import Session
 
-from awsbreaker.conf.config import Config
+from costcutter.conf.config import Config
 
 logger = logging.getLogger(__name__)
 

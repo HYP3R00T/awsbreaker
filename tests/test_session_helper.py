@@ -3,8 +3,8 @@ import os
 
 import pytest
 
-from awsbreaker.conf.config import Config
-from awsbreaker.core import session_helper
+from costcutter.conf.config import Config
+from costcutter.core import session_helper
 
 
 class DummySession:
