@@ -1,4 +1,4 @@
-from awsbreaker.services.ec2 import instances
+from costcutter.services.ec2 import instances
 
 
 class DummySession:
@@ -38,13 +38,13 @@ def test_catalog_instances():
 def test_cleanup_instance(monkeypatch):
     session = DummySession()
     monkeypatch.setattr(
-        "awsbreaker.services.ec2.instances.get_reporter", lambda: type("R", (), {"record": lambda *a, **k: None})()
+        "costcutter.services.ec2.instances.get_reporter", lambda: type("R", (), {"record": lambda *a, **k: None})()
     )
     instances.cleanup_instance(session, "us-east-1", "i-123", dry_run=True)
 
 
 def test_cleanup_instances(monkeypatch):
     session = DummySession()
-    monkeypatch.setattr("awsbreaker.services.ec2.instances.catalog_instances", lambda *args, **kwargs: ["i-123"])
-    monkeypatch.setattr("awsbreaker.services.ec2.instances.cleanup_instance", lambda *args, **kwargs: None)
+    monkeypatch.setattr("costcutter.services.ec2.instances.catalog_instances", lambda *args, **kwargs: ["i-123"])
+    monkeypatch.setattr("costcutter.services.ec2.instances.cleanup_instance", lambda *args, **kwargs: None)
     instances.cleanup_instances(session, "us-east-1", dry_run=True, max_workers=1)

@@ -1,4 +1,4 @@
-from awsbreaker.cli import _render_summary_table, _render_table, main, run_cli
+from costcutter.cli import _render_summary_table, _render_table, main, run_cli
 
 
 class DummyEvent:
@@ -23,18 +23,18 @@ class DummyReporter:
 def test_render_table_empty():
     reporter = DummyReporter()
     table = _render_table(reporter, dry_run=True)
-    assert table.title.startswith("AWSBreaker")
+    assert table.title.startswith("CostCutter")
 
 
 def test_render_summary_table_empty():
     reporter = DummyReporter()
     table = _render_summary_table(reporter, dry_run=True)
-    assert table.title.startswith("AWSBreaker")
+    assert table.title.startswith("CostCutter")
 
 
 def test_run_cli(monkeypatch):
-    monkeypatch.setattr("awsbreaker.cli.get_reporter", lambda: DummyReporter())
-    monkeypatch.setattr("awsbreaker.cli.orchestrate_services", lambda dry_run: None)
+    monkeypatch.setattr("costcutter.cli.get_reporter", lambda: DummyReporter())
+    monkeypatch.setattr("costcutter.cli.orchestrate_services", lambda dry_run: None)
     run_cli(dry_run=True)
 
 
@@ -42,5 +42,5 @@ def test_main(monkeypatch):
     class Ctx:
         invoked_subcommand = None
 
-    monkeypatch.setattr("awsbreaker.cli.run_cli", lambda dry_run, config_file: None)
+    monkeypatch.setattr("costcutter.cli.run_cli", lambda dry_run, config_file: None)
     main(Ctx(), dry_run=True, config=None)

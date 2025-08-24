@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 def run(dry_run: bool | None = None) -> dict[str, Any]:
     """
-    Programmatic API to execute AWSBreaker without printing to stdout.
+    Programmatic API to execute CostCutter without printing to stdout.
 
     This function loads config, initializes logging, executes orchestration,
     and returns a summary dict. All user-facing presentation (headers,

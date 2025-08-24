@@ -1,6 +1,6 @@
 import pytest
 
-from awsbreaker.orchestrator import _service_supported_in_region, orchestrate_services, process_region_service
+from costcutter.orchestrator import _service_supported_in_region, orchestrate_services, process_region_service
 
 
 def test_service_supported_in_region():
@@ -22,14 +22,14 @@ def test_process_region_service(monkeypatch):
 
 def test_orchestrate_services(monkeypatch):
     monkeypatch.setattr(
-        "awsbreaker.orchestrator.get_config",
+        "costcutter.orchestrator.get_config",
         lambda: type(
             "Cfg", (), {"aws": type("AWS", (), {"services": ["ec2"], "region": ["us-east-1"], "max_workers": 1})()}
         )(),
     )
     monkeypatch.setattr(
-        "awsbreaker.orchestrator.create_aws_session",
+        "costcutter.orchestrator.create_aws_session",
         lambda cfg: type("Session", (), {"get_available_regions": lambda self, svc: ["us-east-1"]})(),
     )
-    monkeypatch.setattr("awsbreaker.orchestrator.cleanup_ec2", lambda session, region, dry_run: None)
+    monkeypatch.setattr("costcutter.orchestrator.cleanup_ec2", lambda session, region, dry_run: None)
     orchestrate_services(dry_run=True)

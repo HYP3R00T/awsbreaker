@@ -1,4 +1,4 @@
-# src/awsbreaker/cli.py
+# src/costcutter/cli.py
 from __future__ import annotations
 
 import threading
@@ -28,7 +28,7 @@ def _render_table(reporter, dry_run: bool) -> Table:
     mode = "DRY-RUN" if dry_run else "EXECUTE"
     all_events = reporter.snapshot()
     events = all_events[-TAIL_COUNT:]
-    table = Table(title=f"AWSBreaker — Live events ({mode}, last {TAIL_COUNT})")
+    table = Table(title=f"CostCutter — Live events ({mode}, last {TAIL_COUNT})")
     table.add_column("Time", no_wrap=True, style="dim")
     table.add_column("Region", style="cyan")
     table.add_column("Service", style="magenta")
@@ -77,7 +77,7 @@ def _render_summary_table(reporter, dry_run: bool) -> Table:
     """
     events = reporter.snapshot()
     mode = "DRY-RUN" if dry_run else "EXECUTE"
-    table = Table(title=f"AWSBreaker — Summary ({mode})")
+    table = Table(title=f"CostCutter — Summary ({mode})")
     table.add_column("Service", style="magenta")
     table.add_column("Resource", style="green")
     table.add_column("Action", style="yellow")
@@ -100,7 +100,7 @@ def _render_summary_table(reporter, dry_run: bool) -> Table:
 
 
 def run_cli(dry_run: bool | None = None, config_file: Path | None = None) -> None:
-    """Run the awsbreaker CLI with a live updating event tail and final summary.
+    """Run the costcutter CLI with a live updating event tail and final summary.
 
     The CLI now always shows the Rich live progress UI; simplified per design change.
     """
@@ -112,7 +112,7 @@ def run_cli(dry_run: bool | None = None, config_file: Path | None = None) -> Non
 
     console = Console()
 
-    banner_text = "AWSBreaker"
+    banner_text = "CostCutter"
     credit_line = "Author: HYP3R00T  GitHub: https://github.com/HYP3R00T  Site: https://hyperoot.dev"
 
     # Clear screen and show banner + credits once
@@ -185,7 +185,7 @@ def run_cli(dry_run: bool | None = None, config_file: Path | None = None) -> Non
             console.print(f"[red]Failed to write CSV report: {exc}[/red]")
 
 
-app = typer.Typer(help="AWSBreaker – Kill-switch style cleanup tool for AWS resources.")
+app = typer.Typer(help="CostCutter – Kill-switch style cleanup tool for AWS resources.")
 
 
 @app.callback(invoke_without_command=True)
@@ -194,7 +194,7 @@ def main(
     dry_run: bool | None = None,
     config: Path | None = None,
 ):
-    """Run AWSBreaker (no subcommands yet)."""
+    """Run CostCutter (no subcommands yet)."""
     if config is not None and config.suffix.lower() not in {".yaml", ".yml", ".toml", ".json"}:
         raise typer.BadParameter("Config file must be one of: .yaml, .yml, .toml, .json")
     run_cli(dry_run=dry_run, config_file=config)

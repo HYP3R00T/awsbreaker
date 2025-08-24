@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from awsbreaker.conf.config import (
+from costcutter.conf.config import (
     Config,
     _deep_update,
     _load_env,
@@ -59,9 +59,9 @@ def test_deep_update_recursive_merge() -> None:
 
 
 def test_load_env_parses_types_and_nesting(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AWSBREAKER_FOO__BAR", "true")
-    monkeypatch.setenv("AWSBREAKER_NUM", "123")
-    monkeypatch.setenv("AWSBREAKER_LIST", "[1, 2, 3]")
+    monkeypatch.setenv("COSTCUTTER_FOO__BAR", "true")
+    monkeypatch.setenv("COSTCUTTER_NUM", "123")
+    monkeypatch.setenv("COSTCUTTER_LIST", "[1, 2, 3]")
 
     data = _load_env()
     assert data == {"foo": {"bar": True}, "num": 123, "list": [1, 2, 3]}
@@ -79,15 +79,15 @@ def test_config_wrapper_access_and_to_dict() -> None:
 
 def test_singleton_and_reload(monkeypatch: pytest.MonkeyPatch) -> None:
     # Initial config from env
-    import awsbreaker.conf.config as config_mod
+    import costcutter.conf.config as config_mod
 
-    monkeypatch.setenv("AWSBREAKER_TIMEOUT", "7")
+    monkeypatch.setenv("COSTCUTTER_TIMEOUT", "7")
     config_mod._settings = None
     cfg1 = config_mod.get_config()
     assert cfg1.timeout == 7
 
     # Change env; cached singleton should not change until reload
-    monkeypatch.setenv("AWSBREAKER_TIMEOUT", "8")
+    monkeypatch.setenv("COSTCUTTER_TIMEOUT", "8")
     cfg2 = config_mod.get_config()
     assert cfg2 is cfg1
     assert cfg2.timeout == 7
@@ -105,8 +105,8 @@ def test_singleton_and_reload(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_load_env_safe_load_exception_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     # Force yaml.safe_load to raise so we hit the exception branch and fallback to raw string
-    monkeypatch.setenv("AWSBREAKER_BROKEN", "{not: yaml}")
-    import awsbreaker.conf.config as cfgmod
+    monkeypatch.setenv("COSTCUTTER_BROKEN", "{not: yaml}")
+    import costcutter.conf.config as cfgmod
 
     def boom(_value: str):  # type: ignore[no-untyped-def]
         raise ValueError("parse error")
