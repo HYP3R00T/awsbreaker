@@ -3,9 +3,9 @@
 layout: home
 
 hero:
-  name: "AWS Breaker"
-  text: "A kill-switch for AWS"
-  tagline: "Automate cleanup and reporting for AWS resources."
+  name: "Cost Cutter"
+  #   text: "A kill-switch for AWS"
+  tagline: "A kill-switch for AWS"
   actions:
     - theme: brand
       text: What is CostCutter?
