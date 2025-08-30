@@ -25,23 +25,23 @@ class DummyClientVersioned:
         return P()
 
 
-def test_catalog_top_level_objects_non_versioned():
+def test_catalog_objects_non_versioned():
     client = DummyClientNonVersioned()
-    objs = buckets.catalog_top_level_objects(client=client, bucket_name="b", region="r")
+    objs = buckets.catalog_objects(client=client, bucket_name="b", region="r")
     assert any(o["Key"] == "foo.txt" for o in objs)
     assert all("VersionId" in o for o in objs)
 
 
-def test_catalog_top_level_objects_versioned():
+def test_catalog_objects_versioned():
     client = DummyClientVersioned()
-    objs = buckets.catalog_top_level_objects(client=client, bucket_name="b", region="r")
+    objs = buckets.catalog_objects(client=client, bucket_name="b", region="r")
     # should include both versions and delete markers with VersionId
     keys = {o["Key"] for o in objs}
     assert "v1.txt" in keys and "v2.txt" in keys
     assert all(o.get("VersionId") for o in objs)
 
 
-def test_cleanup_top_level_objects_records_and_calls(monkeypatch):
+def test_cleanup_objects_records_and_calls(monkeypatch):
     recorded = []
 
     class DummyReporter:
