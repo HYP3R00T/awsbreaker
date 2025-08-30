@@ -5,7 +5,7 @@ from boto3.session import Session
 from botocore.exceptions import ClientError
 
 from costcutter.reporter import get_reporter
-from costcutter.services.ec2 import _get_account_id
+from costcutter.services.ec2.common import _get_account_id
 
 SERVICE: str = "ec2"
 RESOURCE: str = "key_pair"
