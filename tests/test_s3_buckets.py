@@ -59,14 +59,47 @@ def test_cleanup_top_level_objects_records_and_calls(monkeypatch):
     monkeypatch.setattr("costcutter.services.s3.buckets.get_reporter", lambda: DummyReporter())
     client = DummyClient()
     objs = [{"Key": "a.txt", "VersionId": "1"}, {"Key": "b.txt", "VersionId": None}]
-    buckets.cleanup_top_level_objects(client=client, bucket_name="buck", objects_to_delete=objs, region="r")
+    # call the batched deleter directly
+    buckets.cleanup_objects(
+        client=client, bucket_name="buck", objects_iter=iter(objs), region="r", reporter=buckets.get_reporter()
+    )
 
     # reporter recorded two events
     assert len(recorded) == 2
-    # client.delete_objects invoked with Objects equal to objs
+    # client.delete_objects invoked with Objects; the second entry should omit VersionId when None
     assert last["Bucket"] == "buck"
     assert isinstance(last["Delete"], dict)
-    assert last["Delete"]["Objects"] == objs
+    expected = [{"Key": "a.txt", "VersionId": "1"}, {"Key": "b.txt"}]
+    assert last["Delete"]["Objects"] == expected
+
+
+def test_delete_errors_are_recorded(monkeypatch):
+    recorded = []
+
+    class DummyReporter:
+        def record(self, *a, **k):
+            recorded.append((a, k))
+
+    # Client that returns an Errors list for delete_objects
+    last = {}
+
+    class DummyClient:
+        def delete_objects(self, **kwargs):
+            last.update(kwargs)
+            return {"Deleted": [], "Errors": [{"Key": "x.txt", "Code": "AccessDenied", "Message": "denied"}]}
+
+    monkeypatch.setattr("costcutter.services.s3.buckets.get_reporter", lambda: DummyReporter())
+    client = DummyClient()
+    objs = [{"Key": "x.txt", "VersionId": None}]
+    # call the batched deleter directly
+    buckets.cleanup_objects(
+        client=client, bucket_name="buck", objects_iter=iter(objs), region="r", reporter=buckets.get_reporter()
+    )
+
+    # Should have recorded the initial delete record and then a failure record
+    assert len(recorded) >= 2
+    # last delete payload should include the object (without VersionId)
+    assert last["Delete"]["Objects"] == [{"Key": "x.txt"}]
 
 
 def test_catalog_buckets_and_cleanup_buckets(monkeypatch):

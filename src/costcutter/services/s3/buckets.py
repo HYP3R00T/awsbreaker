@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -12,85 +13,138 @@ RESOURCE: str = "buckets"
 logger = logging.getLogger(__name__)
 
 
-def catalog_top_level_objects(client: Any, bucket_name: str, region: str) -> list[dict[str, str | None]]:
-    objects_to_delete: list[dict[str, str | None]] = []
+def catalog_objects(client: Any, bucket_name: str, region: str) -> Iterator[dict[str, str | None]]:
+    """Stream top-level objects and versions for a bucket.
+
+    Yields dicts with 'Key' and optional 'VersionId'. Does not accumulate all
+    results in memory.
+    """
     try:
         # List object versions first; include DeleteMarkers so VersionId deletions work.
         paginator = client.get_paginator("list_object_versions")
+        any_versions = False
         for page in paginator.paginate(Bucket=bucket_name, Prefix=""):
             # "Versions" contains actual object versions
             if "Versions" in page:
-                objects_to_delete.extend([{"Key": v["Key"], "VersionId": v.get("VersionId")} for v in page["Versions"]])
+                any_versions = True
+                for v in page["Versions"]:
+                    yield {"Key": v["Key"], "VersionId": v.get("VersionId")}
             # "DeleteMarkers" contains delete markers (also need VersionId)
             if "DeleteMarkers" in page:
-                objects_to_delete.extend([
-                    {"Key": d["Key"], "VersionId": d.get("VersionId")} for d in page["DeleteMarkers"]
-                ])
+                any_versions = True
+                for d in page["DeleteMarkers"]:
+                    yield {"Key": d["Key"], "VersionId": d.get("VersionId")}
         # Fall back to list_objects_v2 for non-versioned buckets (no VersionId).
-        if not objects_to_delete:
+        if not any_versions:
             paginator = client.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=bucket_name, Prefix=""):
                 if "Contents" in page:
-                    objects_to_delete.extend([{"Key": obj["Key"], "VersionId": None} for obj in page["Contents"]])
+                    for obj in page["Contents"]:
+                        yield {"Key": obj["Key"], "VersionId": None}
         logger.info(
-            "[%s][s3] catalog_top_level_objects: found %d objects for bucket=%s",
+            "[%s][s3] catalog_objects: finished streaming objects for bucket=%s",
             region,
-            len(objects_to_delete),
             bucket_name,
         )
     except ClientError as e:
         logger.exception("[%s][s3] Failed to list objects/versions: %s", region, e)
-        objects_to_delete = []
-    return objects_to_delete
+        return
 
 
-def cleanup_top_level_objects(
-    client: Any, bucket_name: str, objects_to_delete: list[dict[str, str | None]], region: str
-):
-    reporter = get_reporter()
-    action = "delete"
-    status = "executing"
-    # Record an individual report for each object (use full object ARN)
-    logger.info(
-        "[%s][s3] cleanup_top_level_objects: preparing to delete %d objects from bucket=%s",
-        region,
-        len(objects_to_delete),
-        bucket_name,
-    )
-    # Record each object's ARN (meta includes VersionId when present).
-    for obj in objects_to_delete:
+def abort_multipart_uploads(client: Any, bucket_name: str, region: str) -> int:
+    """Abort any in-progress multipart uploads for the bucket."""
+    aborted = 0
+    try:
+        paginator = client.get_paginator("list_multipart_uploads")
+        for page in paginator.paginate(Bucket=bucket_name):
+            uploads = page.get("Uploads", [])
+            for up in uploads:
+                key = up.get("Key")
+                upload_id = up.get("UploadId")
+                if not key or not upload_id:
+                    continue
+                try:
+                    client.abort_multipart_upload(Bucket=bucket_name, Key=key, UploadId=upload_id)
+                    aborted += 1
+                except ClientError as e:
+                    logger.warning(
+                        "[%s][s3] abort_multipart_uploads: failed abort upload Key=%s UploadId=%s: %s",
+                        region,
+                        key,
+                        upload_id,
+                        e,
+                    )
+        logger.info("[%s][s3] abort_multipart_uploads: aborted %d uploads for bucket=%s", region, aborted, bucket_name)
+    except ClientError as e:
+        logger.exception("[%s][s3] Failed to list/abort multipart uploads: %s", region, e)
+    return aborted
+
+
+def cleanup_objects(
+    client: Any, bucket_name: str, objects_iter: Iterator[dict[str, str | None]], region: str, reporter
+) -> None:
+    """Delete objects in batches of <=1000. Objects must be dicts with 'Key' and optional 'VersionId'."""
+    batch: list[dict[str, str]] = []
+
+    def _flush_batch():
+        nonlocal batch
+        if not batch:
+            return
+        try:
+            response = client.delete_objects(Bucket=bucket_name, Delete={"Objects": batch, "Quiet": False})
+            logger.info(
+                "[%s][s3] cleanup_objects: delete_objects response Deleted=%s",
+                region,
+                response.get("Deleted", []),
+            )
+            if "Errors" in response:
+                logger.error(
+                    "[%s][s3] cleanup_objects: delete_objects reported errors=%s",
+                    region,
+                    response["Errors"],
+                )
+                # Record a failure event per errored object so reporter shows final status
+                for err in response["Errors"]:
+                    key = err.get("Key")
+                    ver = err.get("VersionId")
+                    code = err.get("Code")
+                    message = err.get("Message")
+                    obj_arn = f"arn:aws:s3:::{bucket_name}/{key}"
+                    meta_fail = {"status": "failed", "key": key, "error_code": code, "error_message": message}
+                    if ver:
+                        meta_fail["version_id"] = ver
+                    try:
+                        reporter.record(region, SERVICE, "object", "delete", arn=obj_arn, meta=meta_fail)
+                    except Exception:
+                        # never fail the delete flow because reporting failed
+                        logger.exception("[%s][s3] failed to record delete error for %s", region, key)
+        except ClientError as e:
+            logger.exception("[%s][s3] _delete_objects_in_batches: Error deleting objects: %s", region, e)
+        batch = []
+
+    for obj in objects_iter:
         key = obj.get("Key")
         if not key:
-            # skip malformed entries
             continue
         version_id = obj.get("VersionId")
+        # record each object's ARN (meta includes VersionId when present).
         obj_arn = f"arn:aws:s3:::{bucket_name}/{key}"
-        # include version id in metadata so reports can reference exact version
-        meta = {"status": status, "key": key}
+        meta = {"status": "executing", "key": key}
         if version_id:
             meta["version_id"] = version_id
-        reporter.record(
-            region,
-            SERVICE,
-            "object",
-            action,
-            arn=obj_arn,
-            meta=meta,
-        )
-    try:
-        # delete_objects accepts per-object VersionId; check Deleted/Errors.
-        response = client.delete_objects(Bucket=bucket_name, Delete={"Objects": objects_to_delete, "Quiet": False})
-        logger.info(
-            "[%s][s3] cleanup_top_level_objects: delete_objects response Deleted=%s",
-            region,
-            response.get("Deleted", []),
-        )
-        if "Errors" in response:
-            logger.error(
-                "[%s][s3] cleanup_top_level_objects: delete_objects reported errors=%s", region, response["Errors"]
-            )
-    except ClientError as e:
-        logger.exception("[%s][s3] cleanup_top_level_objects: Error deleting objects: %s", region, e)
+        reporter.record(region, SERVICE, "object", "delete", arn=obj_arn, meta=meta)
+
+        # build per-object delete entry; omit VersionId when None
+        entry: dict[str, str] = {"Key": key}
+        if version_id:
+            entry["VersionId"] = version_id
+        batch.append(entry)
+
+        if len(batch) >= 1000:
+            _flush_batch()
+
+    # final flush
+    _flush_batch()
 
 
 def catalog_buckets(session: Session, region: str) -> list[str]:
@@ -106,9 +160,14 @@ def catalog_buckets(session: Session, region: str) -> list[str]:
             if not name:
                 continue
             try:
-                loc = client.get_bucket_location(Bucket=name).get("LocationConstraint")
-                # AWS returns None for us-east-1
-                bucket_region = loc or "us-east-1"
+                # Some test/dummy clients may not implement get_bucket_location.
+                if not hasattr(client, "get_bucket_location"):
+                    # assume the bucket is in the requested region
+                    bucket_region = region
+                else:
+                    loc = client.get_bucket_location(Bucket=name).get("LocationConstraint")
+                    # AWS returns None for us-east-1
+                    bucket_region = loc or "us-east-1"
             except ClientError as e:
                 logger.warning("[%s][s3] could not get location for bucket=%s: %s", region, name, e)
                 continue
@@ -144,23 +203,17 @@ def cleanup_bucket(session: Session, region: str, bucket_name: str, dry_run: boo
         return
     try:
         client = session.client("s3", region_name=region)
-        # Determine top-level objects (handles versioned and non-versioned buckets)
-        objects_to_delete: list[dict[str, str]] = catalog_top_level_objects(
-            client=client, bucket_name=bucket_name, region=region
-        )
-        if objects_to_delete:
-            logger.info(
-                "[%s][s3][bucket] found %d objects to delete for bucket=%s",
-                region,
-                len(objects_to_delete),
-                bucket_name,
-            )
-            cleanup_top_level_objects(
-                client=client, bucket_name=bucket_name, objects_to_delete=objects_to_delete, region=region
-            )
-        else:
-            logger.info("[%s][s3][bucket] no objects to delete for bucket=%s", region, bucket_name)
+        # Abort any in-progress multipart uploads first
+        abort_multipart_uploads(client=client, bucket_name=bucket_name, region=region)
 
+        # Stream objects/versions and delete in batches to avoid memory blowup.
+        objects_iter = catalog_objects(client=client, bucket_name=bucket_name, region=region)
+        # Use the batched deleter which also records per-object reports.
+        cleanup_objects(
+            client=client, bucket_name=bucket_name, objects_iter=objects_iter, region=region, reporter=reporter
+        )
+
+        # Finally delete the bucket
         client.delete_bucket(Bucket=bucket_name)
         logger.info("[%s][s3][bucket] delete requested bucket=%s", region, bucket_name)
         reporter.record(
