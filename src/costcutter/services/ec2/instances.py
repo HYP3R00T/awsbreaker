@@ -6,28 +6,11 @@ from boto3.session import Session
 from botocore.exceptions import ClientError
 
 from costcutter.reporter import get_reporter
+from costcutter.services.ec2 import _get_account_id
 
 SERVICE: str = "ec2"
 RESOURCE: str = "instance"
 logger = logging.getLogger(__name__)
-
-_ACCOUNT_ID: str | None = None
-
-
-def _get_account_id(session: Session) -> str:
-    """Return (and cache) the current AWS account id.
-
-    We intentionally keep a simple module-level cache instead of introducing a
-    shared helper file per user instruction not to create extra files.
-    """
-    global _ACCOUNT_ID
-    if _ACCOUNT_ID is None:
-        try:
-            _ACCOUNT_ID = session.client("sts").get_caller_identity().get("Account", "")
-        except Exception as e:  # pragma: no cover - extremely unlikely
-            logger.error("Failed to resolve account id: %s", e)
-            _ACCOUNT_ID = ""
-    return _ACCOUNT_ID
 
 
 def catalog_instances(session: Session, region: str) -> list[str]:
