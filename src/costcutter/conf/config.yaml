@@ -1,11 +1,11 @@
 dry_run: true
 logging:
-  enabled: false
+  enabled: true
   level: INFO
   dir: ~/.local/share/costcutter/logs
 reporting:
   csv:
-    enabled: false
+    enabled: true
     path: ~/.local/share/costcutter/reports/events.csv
 aws:
   profile: default
@@ -20,5 +20,6 @@ aws:
     - ap-south-1
   services:
     # - all to scan for all services (WIP)
-    - ec2
-    - lambda
+    # - ec2
+    - s3
+    # - lambda

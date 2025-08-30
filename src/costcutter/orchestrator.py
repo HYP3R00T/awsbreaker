@@ -11,13 +11,14 @@ from costcutter.core.session_helper import create_aws_session
 
 # Reporter no longer needed at service-level (resource handlers still record events)
 from costcutter.services.ec2 import cleanup_ec2
+from costcutter.services.s3 import cleanup_s3
 
 logger = logging.getLogger(__name__)
 
 SERVICE_HANDLERS = {
     # Each value can be a functional entrypoint `run(session, region, dry_run, reporter)`
     "ec2": cleanup_ec2,
-    # "s3": cleanup_s3
+    "s3": cleanup_s3,
     # "lambda": cleanup_lambda,
 }
 
