@@ -3,10 +3,6 @@ name: Deploy VitePress site to Pages
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-    types:
-      - closed
   workflow_dispatch:
 
 permissions:
@@ -20,8 +16,7 @@ concurrency:
 
 jobs:
   build:
-    # Run for push, manual trigger, or merged PR
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+    # Run for push or manual trigger
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -48,16 +43,12 @@ jobs:
       - name: Build with VitePress
         run: pnpm build
 
-      - name: Add custom domain CNAME
-        run: echo "costcutter.hyperoot.dev" > docs/.vitepress/dist/CNAME
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: docs/.vitepress/dist
 
   deploy:
-    if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
