@@ -94,14 +94,28 @@ def cleanup_top_level_objects(
 
 
 def catalog_buckets(session: Session, region: str) -> list[str]:
-    client = session.client(service_name="s3", region_name=region)
+    # Use an S3 client without a forced region to list and query bucket locations.
+    client = session.client(service_name="s3")
 
     bucket_names: list[str] = []
     try:
         resp = client.list_buckets()
         buckets = resp.get("Buckets", [])
-        bucket_names = [b.get("Name") for b in buckets if b.get("Name")]
-        logger.info("[%s][s3] catalog_buckets: discovered %d buckets", region, len(bucket_names))
+        for b in buckets:
+            name = b.get("Name")
+            if not name:
+                continue
+            try:
+                loc = client.get_bucket_location(Bucket=name).get("LocationConstraint")
+                # AWS returns None for us-east-1
+                bucket_region = loc or "us-east-1"
+            except ClientError as e:
+                logger.warning("[%s][s3] could not get location for bucket=%s: %s", region, name, e)
+                continue
+            # include bucket only if its location matches the requested region
+            if bucket_region == region:
+                bucket_names.append(name)
+        logger.info("[%s][s3] catalog_buckets: discovered %d buckets in region %s", region, len(bucket_names), region)
     except ClientError as e:
         logger.exception("[%s][s3] Failed to list buckets: %s", region, e)
         bucket_names = []
